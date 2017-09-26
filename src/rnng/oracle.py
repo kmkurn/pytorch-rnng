@@ -69,7 +69,7 @@ class BaseOracle:
                     yield (start, i)
 
     @abc.abstractclassmethod
-    def from_parsed_string(cls, line: str):
+    def from_bracketed_string(cls, line: str):
         pass
 
 
@@ -87,7 +87,7 @@ class DiscOracle(BaseOracle):
         self.pos_tags = pos_tags
 
     @classmethod
-    def from_parsed_string(cls, line: str) -> 'DiscOracle':
+    def from_bracketed_string(cls, line: str) -> 'DiscOracle':
         if len(line) < 2:
             raise ValueError('string must have length at least 2 (open and close brackets)')
         if line[0] != '(' or line[-1] != ')':
@@ -100,7 +100,7 @@ class DiscOracle(BaseOracle):
             actions: List[DiscParserAction] = [NTAction(nt_label)]
             pos_tags, words = [], []
             for i, j in spans:
-                child_oracle = cls.from_parsed_string(line[i:j+1])
+                child_oracle = cls.from_bracketed_string(line[i:j+1])
                 actions.extend(child_oracle.actions)
                 pos_tags.extend(child_oracle.pos_tags)
                 words.extend(child_oracle.words)
@@ -121,7 +121,7 @@ class GenOracle(BaseOracle):
         self.pos_tags = pos_tags
 
     @classmethod
-    def from_parsed_string(cls, line: str) -> 'GenOracle':
+    def from_bracketed_string(cls, line: str) -> 'GenOracle':
         if len(line) < 2:
             raise ValueError('string must have length at least 2 (open and close brackets)')
         if line[0] != '(' or line[-1] != ')':
@@ -134,7 +134,7 @@ class GenOracle(BaseOracle):
             actions: List[GenParserAction] = [NTAction(nt_label)]
             pos_tags = []
             for i, j in spans:
-                child_oracle = cls.from_parsed_string(line[i:j+1])
+                child_oracle = cls.from_bracketed_string(line[i:j+1])
                 actions.extend(child_oracle.actions)
                 pos_tags.extend(child_oracle.pos_tags)
             actions.append(ReduceAction())
