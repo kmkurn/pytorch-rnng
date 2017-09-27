@@ -1,13 +1,9 @@
+#!/usr/bin/env python
+
 from argparse import ArgumentParser
 import sys
 
 from rnng.oracle import DiscOracle, GenOracle, GenAction
-
-
-def print_oracle(oracle):
-    out = [' '.join(oracle.words), ' '.join(oracle.pos_tags)]
-    out.extend([str(a) for a in oracle.actions])
-    return '\n'.join(out)
 
 
 parser = ArgumentParser(description='Get oracle for a given corpus')
@@ -41,8 +37,7 @@ try:
             if args.lowercase:
                 oracle.words = [w.lower() for w in oracle.words]
             oracle.words = ['UNK' if w not in vocab else w for w in oracle.words]
-        print(print_oracle(oracle))
-        print()
+        print(str(oracle), end='\n\n')
 finally:
     if infile is not sys.stdin:
         infile.close()
