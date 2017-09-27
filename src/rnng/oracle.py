@@ -102,6 +102,11 @@ class BaseOracle:
                 if counter == 0:
                     yield (start, i)
 
+        if counter > 0:
+            raise ValueError('unbalanced brackets (too many opening brackets)')
+        elif counter < 0:
+            raise ValueError('unbalanced brackets (too many closing brackets)')
+
     @abc.abstractclassmethod
     def from_bracketed_string(cls, line: str):
         pass
