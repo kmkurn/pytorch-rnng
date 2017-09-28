@@ -17,7 +17,9 @@ class StackedLSTMCell(Module):
         self.hidden_size = hidden_size
         self.num_layers = num_layers
         self.dropout = dropout
-        self._cells = [LSTMCell(input_size, hidden_size) for _ in range(num_layers)]
+        self._cells = [LSTMCell(input_size, hidden_size)]
+        for _ in range(num_layers - 1):
+            self._cells.append(LSTMCell(hidden_size, hidden_size))
 
     def forward(self, inputs: Variable, init_states: Tuple[Variable, Variable]) -> Tuple[
             Variable, Variable]:
