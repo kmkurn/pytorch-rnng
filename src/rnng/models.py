@@ -38,7 +38,7 @@ class StackedLSTMCell(Module):
 
         if h0.dim() != 3 or c0.dim() != 3:
             raise ValueError('h0 and c0 should have dimension of 3')
-        if h0.size()[0] != self.num_layers or c0.size()[0] != self.num_layers:
+        if h0.size(0) != self.num_layers or c0.size(0) != self.num_layers:
             raise ValueError('first dimension of h0 and c0 should match the number of layers')
 
         inputs = F.dropout(inputs, p=self.dropout, training=self.training)
