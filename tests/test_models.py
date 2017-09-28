@@ -29,7 +29,7 @@ class TestStackedLSTMCell:
                                         Variable(torch.randn(batch_size, hidden_size)))
                                        for _ in range(3)])
                  for i in range(num_layers)]
-        mocker.patch('rnng.models.LSTMCell', side_effect=cells)
+        mocker.patch('rnng.models.nn.LSTMCell', side_effect=cells)
 
         inputs = Variable(torch.randn(batch_size, input_size))
         h0 = Variable(torch.randn(num_layers, batch_size, hidden_size))
