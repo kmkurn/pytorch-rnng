@@ -3,7 +3,7 @@ from typing import Tuple
 import torch
 import torch.nn.functional as F
 from torch.autograd import Variable
-from torch.nn import Module, LSTMCell
+from torch.nn import Parameter, Module, LSTMCell
 
 
 class StackedLSTMCell(Module):
@@ -59,18 +59,19 @@ class EmptyStackError(Exception):
 
 class StackLSTM(Module):
     def __init__(self, input_size: int, hidden_size: int, num_layers: int = 1,
-                 dropout: float = 0.) -> None:
+                 dropout: float = 0., init_states_std: float = .1) -> None:
         super().__init__()
         self.input_size = input_size
         self.hidden_size = hidden_size
         self.num_layers = num_layers
         self.dropout = dropout
+        self.init_states_std = init_states_std
+        self.h0 = Parameter(self.init_states_std*torch.randn(num_layers, 1, hidden_size))
+        self.c0 = Parameter(self.init_states_std*torch.randn(num_layers, 1, hidden_size))
+        init_states = (self.h0, self.c0)
+        self._history = [init_states]
         self._cell = StackedLSTMCell(input_size, hidden_size, num_layers=num_layers,
                                      dropout=dropout)
-
-        h0 = Variable(torch.zeros(num_layers, 1, hidden_size))
-        c0 = Variable(torch.zeros(num_layers, 1, hidden_size))
-        self._history = [(h0, c0)]
 
     def forward(self, inputs: Variable) -> Tuple[Variable, Variable]:
         # inputs: 1 x input_size
