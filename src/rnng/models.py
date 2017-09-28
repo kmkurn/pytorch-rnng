@@ -53,6 +53,11 @@ class StackedLSTMCell(Module):
             c1.append(next_c)
         return torch.stack(h1), torch.stack(c1)
 
+    def __repr__(self) -> str:
+        res = ('{}(input_size={input_size}, hidden_size={hidden_size}, '
+               'num_layers={num_layers}, dropout={dropout}')
+        return res.format(self.__class__.__name__, **self.__dict__)
+
 
 class EmptyStackError(Exception):
     def __init__(self):
@@ -93,3 +98,9 @@ class StackLSTM(Module):
     def top(self) -> Variable:
         # outputs: 1 x hidden_size
         return self._history[-1][0][-1] if len(self._history) > 1 else None
+
+    def __repr__(self) -> str:
+        res = ('{}(input_size={input_size}, hidden_size={hidden_size}, '
+               'num_layers={num_layers}, dropout={dropout}, '
+               'init_states_std={init_states_std})')
+        return res.format(self.__class__.__name__, **self.__dict__)
