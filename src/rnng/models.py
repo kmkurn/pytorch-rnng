@@ -1,7 +1,9 @@
+import math
 from typing import Tuple
 
 import torch
 import torch.nn.functional as F
+import torch.nn.init as init
 from torch.autograd import Variable
 from torch.nn import Parameter, Module, LSTMCell
 
@@ -53,6 +55,13 @@ class StackedLSTMCell(Module):
             c1.append(next_c)
         return torch.stack(h1), torch.stack(c1)
 
+    def reset_parameters(self) -> None:
+        for cell in self._cells:
+            init.orthogonal(cell.weight_ih)
+            init.orthogonal(cell.weight_hh)
+            init.constant(cell.bias_ih, 0)
+            init.constant(cell.bias_hh, 0)
+
     def __repr__(self) -> str:
         res = ('{}(input_size={input_size}, hidden_size={hidden_size}, '
                'num_layers={num_layers}, dropout={dropout}')
@@ -66,15 +75,14 @@ class EmptyStackError(Exception):
 
 class StackLSTM(Module):
     def __init__(self, input_size: int, hidden_size: int, num_layers: int = 1,
-                 dropout: float = 0., init_states_std: float = .1) -> None:
+                 dropout: float = 0.) -> None:
         super().__init__()
         self.input_size = input_size
         self.hidden_size = hidden_size
         self.num_layers = num_layers
         self.dropout = dropout
-        self.init_states_std = init_states_std
-        self.h0 = Parameter(self.init_states_std*torch.randn(num_layers, 1, hidden_size))
-        self.c0 = Parameter(self.init_states_std*torch.randn(num_layers, 1, hidden_size))
+        self.h0 = Parameter(torch.Tensor(num_layers, 1, hidden_size))
+        self.c0 = Parameter(torch.Tensor(num_layers, 1, hidden_size))
         init_states = (self.h0, self.c0)
         self._history = [init_states]
         self._cell = StackedLSTMCell(input_size, hidden_size, num_layers=num_layers,
@@ -102,8 +110,13 @@ class StackLSTM(Module):
         # outputs: 1 x hidden_size
         return self._history[-1][0][-1] if len(self._history) > 1 else None
 
+    def reset_parameters(self, init_states_std: float = .1) -> None:
+        k = init_states_std * math.sqrt(3)
+        init.uniform(self.h0, -k, k)
+        init.uniform(self.c0, -k, k)
+        self._cell.reset_parameters()
+
     def __repr__(self) -> str:
         res = ('{}(input_size={input_size}, hidden_size={hidden_size}, '
-               'num_layers={num_layers}, dropout={dropout}, '
-               'init_states_std={init_states_std})')
+               'num_layers={num_layers}, dropout={dropout})')
         return res.format(self.__class__.__name__, **self.__dict__)
