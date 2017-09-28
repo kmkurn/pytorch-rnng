@@ -88,6 +88,9 @@ class StackLSTM(Module):
         self._history.append(next_hist)
         return next_hist
 
+    def push(self, *args, **kwargs):
+        return self(*args, **kwargs)
+
     def pop(self) -> Tuple[Variable, Variable]:
         if len(self._history) > 1:
             return self._history.pop()
