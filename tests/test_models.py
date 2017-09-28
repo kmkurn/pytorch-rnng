@@ -8,7 +8,7 @@ from rnng.models import StackedLSTMCell, StackLSTM, EmptyStackError
 class MockLSTMCell:
     def __init__(self, retvals=None):
         if retvals is None:
-            retvals = [('a', 1), ('b', 2), ('c', 3)]
+            retvals = []
 
         self.index = 0
         self.retvals = retvals
