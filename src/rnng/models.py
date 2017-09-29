@@ -36,7 +36,8 @@ class StackLSTM(nn.Module):
         # inputs: input_size
         assert self._states_hist
 
-        inputs = inputs.unsqueeze(0)
+        # Set seq_len and batch_size to 1
+        inputs = inputs.unsqueeze(0).unsqueeze(0)
         next_outputs, next_states = self._lstm(inputs, self._states_hist[-1])
         self._states_hist.append(next_states)
         self._outputs_hist.append(next_outputs)
