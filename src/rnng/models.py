@@ -3,12 +3,18 @@ from typing import Tuple
 
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
 import torch.nn.init as init
 from torch.autograd import Variable
 
 
-class StackedLSTMCell(nn.Module):
+class EmptyStackError(Exception):
+    def __init__(self):
+        super().__init__('stack is already empty')
+
+
+class StackLSTM(nn.Module):
+    batch_size = 1
+
     def __init__(self, input_size: int, hidden_size: int, num_layers: int = 1,
                  dropout: float = 0.) -> None:
         if num_layers < 1:
@@ -19,102 +25,48 @@ class StackedLSTMCell(nn.Module):
         self.hidden_size = hidden_size
         self.num_layers = num_layers
         self.dropout = dropout
-        self._cells = [nn.LSTMCell(input_size, hidden_size)]
-        for _ in range(num_layers - 1):
-            self._cells.append(nn.LSTMCell(hidden_size, hidden_size))
-
-    def forward(self, inputs: Variable, init_states: Tuple[Variable, Variable]) -> Tuple[
-            Variable, Variable]:
-        # inputs: batch_size x input_size
-        # init_states: (h0, c0)
-        # h0: num_layers x batch_size x hidden_size
-        # c0: num_layers x batch_size x hidden_size
-        # outputs: (h1, c1)
-        # h1: num_layers x batch_size x hidden_size
-        # c1: num_layers x batch_size x hidden_size
-
-        assert len(self._cells) >= 1
-
-        h0, c0 = init_states
-        h1, c1 = [], []
-
-        if h0.dim() != 3 or c0.dim() != 3:
-            raise ValueError('h0 and c0 should have dimension of 3')
-        if h0.size(0) != self.num_layers or c0.size(0) != self.num_layers:
-            raise ValueError('first dimension of h0 and c0 should match the number of layers')
-
-        inputs = F.dropout(inputs, p=self.dropout, training=self.training)
-        next_h, next_c = self._cells[0](inputs, (h0[0], c0[0]))
-        next_h = F.dropout(next_h, p=self.dropout, training=self.training)
-        h1.append(next_h)
-        c1.append(next_c)
-        for cell, h0_layer, c0_layer in zip(self._cells[1:], h0[1:], c0[1:]):
-            next_h, next_c = cell(next_h, (h0_layer, c0_layer))
-            next_h = F.dropout(next_h, p=self.dropout, training=self.training)
-            h1.append(next_h)
-            c1.append(next_c)
-        return torch.stack(h1), torch.stack(c1)
-
-    def reset_parameters(self) -> None:
-        for cell in self._cells:
-            init.orthogonal(cell.weight_ih)
-            init.orthogonal(cell.weight_hh)
-            init.constant(cell.bias_ih, 0)
-            init.constant(cell.bias_hh, 0)
-
-    def __repr__(self) -> str:
-        res = ('{}(input_size={input_size}, hidden_size={hidden_size}, '
-               'num_layers={num_layers}, dropout={dropout}')
-        return res.format(self.__class__.__name__, **self.__dict__)
-
-
-class EmptyStackError(Exception):
-    def __init__(self):
-        super().__init__('stack is already empty')
-
-
-class StackLSTM(nn.Module):
-    def __init__(self, input_size: int, hidden_size: int, num_layers: int = 1,
-                 dropout: float = 0.) -> None:
-        super().__init__()
-        self.input_size = input_size
-        self.hidden_size = hidden_size
-        self.num_layers = num_layers
-        self.dropout = dropout
-        self.h0 = nn.Parameter(torch.Tensor(num_layers, 1, hidden_size))
-        self.c0 = nn.Parameter(torch.Tensor(num_layers, 1, hidden_size))
+        self.h0 = nn.Parameter(torch.Tensor(num_layers, self.batch_size, hidden_size))
+        self.c0 = nn.Parameter(torch.Tensor(num_layers, self.batch_size, hidden_size))
         init_states = (self.h0, self.c0)
-        self._history = [init_states]
-        self._cell = StackedLSTMCell(input_size, hidden_size, num_layers=num_layers,
-                                     dropout=dropout)
+        self._states_hist = [init_states]
+        self._outputs_hist = []  # noqa
+        self._lstm = nn.LSTM(input_size, hidden_size, num_layers=num_layers, dropout=dropout)
 
     def forward(self, inputs: Variable) -> Tuple[Variable, Variable]:
-        # inputs: 1 x input_size
-        assert self._history
+        # inputs: input_size
+        assert self._states_hist
 
-        next_hist = self._cell(inputs, self._history[-1])
-        self._history.append(next_hist)
-        return next_hist
+        inputs = inputs.unsqueeze(0)
+        next_outputs, next_states = self._lstm(inputs, self._states_hist[-1])
+        self._states_hist.append(next_states)
+        self._outputs_hist.append(next_outputs)
+        return next_states
 
     def push(self, *args, **kwargs):
         return self(*args, **kwargs)
 
     def pop(self) -> Tuple[Variable, Variable]:
-        if len(self._history) > 1:
-            return self._history.pop()
+        if len(self._states_hist) > 1:
+            self._outputs_hist.pop()
+            return self._states_hist.pop()
         else:
             raise EmptyStackError()
 
     @property
     def top(self) -> Variable:
-        # outputs: 1 x hidden_size
-        return self._history[-1][0][-1] if len(self._history) > 1 else None
+        # outputs: hidden_size
+        return self._outputs_hist[-1].squeeze() if self._outputs_hist else None
 
     def reset_parameters(self, init_states_std: float = .1) -> None:
         k = init_states_std * math.sqrt(3)
         init.uniform(self.h0, -k, k)
         init.uniform(self.c0, -k, k)
-        self._cell.reset_parameters()
+
+        for attr in dir(self._lstm):
+            if attr.startswith('weight_'):
+                init.orthogonal(getattr(self._lstm, attr))
+            elif attr.startswith('bias_'):
+                init.constant(getattr(self._lstm, attr), 0.)
 
     def __repr__(self) -> str:
         res = ('{}(input_size={input_size}, hidden_size={hidden_size}, '
