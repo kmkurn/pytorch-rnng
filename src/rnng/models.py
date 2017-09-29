@@ -13,7 +13,8 @@ class EmptyStackError(Exception):
 
 
 class StackLSTM(nn.Module):
-    batch_size = 1
+    BATCH_SIZE = 1
+    SEQ_LEN = 1
 
     def __init__(self, input_size: int, hidden_size: int, num_layers: int = 1,
                  dropout: float = 0.) -> None:
@@ -25,8 +26,8 @@ class StackLSTM(nn.Module):
         self.hidden_size = hidden_size
         self.num_layers = num_layers
         self.dropout = dropout
-        self.h0 = nn.Parameter(torch.Tensor(num_layers, self.batch_size, hidden_size))
-        self.c0 = nn.Parameter(torch.Tensor(num_layers, self.batch_size, hidden_size))
+        self.h0 = nn.Parameter(torch.Tensor(num_layers, self.BATCH_SIZE, hidden_size))
+        self.c0 = nn.Parameter(torch.Tensor(num_layers, self.BATCH_SIZE, hidden_size))
         init_states = (self.h0, self.c0)
         self._states_hist = [init_states]
         self._outputs_hist = []  # noqa
