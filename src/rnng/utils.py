@@ -1,7 +1,7 @@
 from typing import Collection, Iterator
 
 
-class TermCollection(Collection[str]):
+class TermStore(Collection[str]):
     def __init__(self):
         self._term2id = {}
         self._id2term = {}

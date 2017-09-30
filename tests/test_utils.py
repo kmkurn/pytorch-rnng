@@ -1,9 +1,9 @@
-from rnng.utils import TermCollection
+from rnng.utils import TermStore
 
 
-class TestTermCollection:
+class TestTermStore:
     def test_contains(self):
-        tc = TermCollection()
+        tc = TermStore()
         for c in list('aabbcc'):
             tc.add(c)
 
@@ -13,21 +13,21 @@ class TestTermCollection:
         assert 'd' not in tc
 
     def test_iter(self):
-        tc = TermCollection()
+        tc = TermStore()
         for c in list('aabbcc'):
             tc.add(c)
 
         assert sorted(list('abc')) == sorted(tc)
 
     def test_len(self):
-        tc = TermCollection()
+        tc = TermStore()
         for c in list('aabbcc'):
             tc.add(c)
 
         assert len(tc) == 3
 
     def test_unique_ids(self):
-        tc = TermCollection()
+        tc = TermStore()
         for c in list('aabbcc'):
             tc.add(c)
 
@@ -37,7 +37,7 @@ class TestTermCollection:
             assert 0 <= i < len(tc)
 
     def test_invertible(self):
-        tc = TermCollection()
+        tc = TermStore()
         for c in list('aabbcc'):
             tc.add(c)
 
