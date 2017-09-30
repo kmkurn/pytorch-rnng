@@ -1,39 +1,26 @@
 #!/usr/bin/env python
 
 from argparse import ArgumentParser
-from collections import defaultdict
-import sys
+import pickle
 
-from rnng.oracle import DiscOracle
+from rnng.oracle import DiscOracle, GenOracle
+from rnng.vocab import Vocabulary
 
 
-parser = ArgumentParser(
-    description='Get vocabulary from a training corpus and print to stdout')
-parser.add_argument('file',
-                    help="training corpus file, or 'STDIN' to read from standard input")
+parser = ArgumentParser(description='Get vocabulary from an oracle file')
+parser.add_argument('oracle', help='path to oracle file')
+parser.add_argument('--outfile', '-o', required=True, help='where to save the vocabulary to')
+parser.add_argument('--generative', '-g', action='store_true', default=False,
+                    help='whether the oracle file is for the generative parser')
 parser.add_argument('--min-count', '-c', type=int, default=2,
                     help='minimum word count to be included in the vocabulary (default: 2)')
-parser.add_argument('--no-lowercase', action='store_false', default=True, dest='lowercase',
-                    help='do not lowercase words')
 args = parser.parse_args()
 
-try:
-    if args.file == 'STDIN':
-        infile = sys.stdin
-    else:
-        infile = open(args.file)
-
-    count = defaultdict(int)
-    for line in infile:
-        oracle = DiscOracle.from_bracketed_string(line.strip())
-        for w in oracle.words:
-            if args.lowercase:
-                w = w.lower()
-            count[w] += 1
-finally:
-    if infile is not sys.stdin:
-        infile.close()
-
-for word, cnt in sorted(count.items()):
-    if cnt >= args.min_count:
-        print(word)
+vocab = Vocabulary(min_count=args.min_count)
+oracle_class = GenOracle if args.generative else DiscOracle
+with open(args.oracle) as f:
+    oracles = [oracle_class.from_string(oracle_str)
+               for oracle_str in f.read().split('\n\n') if oracle_str]
+vocab.load_oracles(oracles)
+with open(args.outfile, 'wb') as f:
+    pickle.dump(vocab, f)
