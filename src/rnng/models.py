@@ -1,5 +1,6 @@
 import math
 from typing import Tuple
+from typing import List  # noqa
 
 import torch
 import torch.nn as nn
@@ -30,7 +31,7 @@ class StackLSTM(nn.Module):
         self.c0 = nn.Parameter(torch.Tensor(num_layers, self.BATCH_SIZE, hidden_size))
         init_states = (self.h0, self.c0)
         self._states_hist = [init_states]
-        self._outputs_hist = []  # noqa
+        self._outputs_hist = []  # type: List[Variable]
         self._lstm = nn.LSTM(input_size, hidden_size, num_layers=num_layers, dropout=dropout)
 
     def forward(self, inputs: Variable) -> Tuple[Variable, Variable]:
