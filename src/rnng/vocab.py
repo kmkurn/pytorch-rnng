@@ -58,7 +58,7 @@ class Vocabulary:
         return list(self._word_vocab)
 
     @property
-    def pos_tags(self) -> List[str]:
+    def pos_tags(self) -> List[NTLabel]:
         return list(self._pos_vocab)
 
     @property
@@ -72,7 +72,7 @@ class Vocabulary:
     def get_word_id(self, word: Word) -> int:
         return self._word_vocab.get_id(word)
 
-    def get_pos_id(self, pos: str) -> int:
+    def get_pos_id(self, pos: NTLabel) -> int:
         return self._pos_vocab.get_id(pos)
 
     def get_nt_id(self, nt_label: NTLabel) -> int:
