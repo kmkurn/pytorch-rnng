@@ -18,4 +18,4 @@ treebank = Treebank(args.corpus, lowercase=args.lowercase)
 for parsed_sent in treebank.parsed_sents():
     oracle_class = GenOracle if args.generative else DiscOracle
     oracle = oracle_class.from_parsed_sent(parsed_sent)
-    print(str(oracle), end='\n\n')
+    print(oracle, end='\n\n')
