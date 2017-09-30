@@ -91,31 +91,31 @@ class GenAction(Action):
 
 
 class Oracle:
-    def __init__(self, actions: Sequence[Action], pos_tags: Sequence[NTLabel],
-                 words: Sequence[Word]) -> None:
-        self.actions = actions
-        self.pos_tags = pos_tags
-        self.words = words
+    __metaclass__ = abc.ABCMeta
 
+    @abc.abstractmethod
     def __str__(self) -> str:
-        raise NotImplementedError
+        pass
 
     @classmethod
-    def from_parsed_sent(cls, parsed_sent: Tree) -> 'Oracle':
-        raise NotImplementedError
+    @abc.abstractmethod
+    def from_parsed_sent(cls, parsed_sent: Tree):
+        pass
 
     @classmethod
-    def from_string(cls, line: str) -> 'Oracle':
-        raise NotImplementedError
+    @abc.abstractmethod
+    def from_string(cls, line: str):
+        pass
 
     @classmethod
-    def get_action_on_pos_node(cls, pos_node: Tree) -> Action:
-        raise NotImplementedError
+    @abc.abstractmethod
+    def get_action_at_pos_node(cls, pos_node: Tree) -> Action:
+        pass
 
     @classmethod
     def get_actions(cls, tree: Tree) -> List[Action]:
         if len(tree) == 1 and not isinstance(tree[0], Tree):
-            return [cls.get_action_on_pos_node(tree)]
+            return [cls.get_action_at_pos_node(tree)]
 
         actions: List[Action] = [NTAction(tree.label())]
         for child in tree:
@@ -133,7 +133,9 @@ class DiscOracle(Oracle):
         if len(pos_tags) != len(words):
             raise ValueError('number of POS tags should match number of words')
 
-        super().__init__(actions, pos_tags, words)
+        self.actions = actions
+        self.pos_tags = pos_tags
+        self.words = words
 
     def __str__(self) -> str:
         out = [' '.join(self.words), ' '.join(self.pos_tags)]
@@ -147,7 +149,7 @@ class DiscOracle(Oracle):
         return cls(actions, list(pos_tags), list(words))
 
     @classmethod
-    def get_action_on_pos_node(cls, pos_node: Tree) -> ShiftAction:
+    def get_action_at_pos_node(cls, pos_node: Tree) -> Action:
         if len(pos_node) != 1 or isinstance(pos_node[0], Tree):
             raise ValueError('input is not a valid POS node')
         return ShiftAction()
@@ -182,13 +184,17 @@ class GenOracle(Oracle):
         if len(pos_tags) != gen_cnt:
             raise ValueError('number of POS tags should match number of GEN actions')
 
-        words = [a.word for a in actions if isinstance(a, GenAction)]
-        super().__init__(actions, pos_tags, words)
+        self.actions = actions
+        self.pos_tags = pos_tags
 
     def __str__(self) -> str:
         out = [' '.join(self.pos_tags)]
         out.extend([str(a) for a in self.actions])
         return '\n'.join(out)
+
+    @property
+    def words(self) -> List[Word]:
+        return [a.word for a in self.actions if isinstance(a, GenAction)]
 
     @classmethod
     def from_parsed_sent(cls, parsed_sent: Tree) -> 'GenOracle':
@@ -197,7 +203,7 @@ class GenOracle(Oracle):
         return cls(actions, list(pos_tags))
 
     @classmethod
-    def get_action_on_pos_node(cls, pos_node: Tree) -> GenAction:
+    def get_action_at_pos_node(cls, pos_node: Tree) -> Action:
         if len(pos_node) != 1 or isinstance(pos_node[0], Tree):
             raise ValueError('input is not a valid POS node')
         return GenAction(pos_node[0])
