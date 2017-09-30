@@ -1,7 +1,7 @@
 from collections import Counter
 from typing import Collection, Iterator, List, Sequence
 
-from rnng.oracle import BaseOracle, NTAction, Word, NTLabel
+from rnng.oracle import Oracle, NTAction, Word, NTLabel
 
 
 class TermCollection(Collection[str]):
@@ -40,7 +40,7 @@ class Vocabulary:
         self._nt_vocab = TermCollection()
         self._act_vocab = TermCollection()
 
-    def load_oracles(self, oracles: Sequence[BaseOracle]) -> None:
+    def load_oracles(self, oracles: Sequence[Oracle]) -> None:
         counter = Counter([w for oracle in oracles for w in oracle.words])
         for oracle in oracles:
             for word in oracle.words:

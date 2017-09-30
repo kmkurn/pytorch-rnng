@@ -88,7 +88,7 @@ DiscParserAction = Union[ShiftAction, ReduceAction, NTAction]
 GenParserAction = Union[GenAction, ReduceAction, NTAction]
 
 
-class BaseOracle:
+class Oracle:
     __metaclass__ = abc.ABCMeta
 
     @abc.abstractmethod
@@ -119,7 +119,7 @@ class BaseOracle:
         return actions
 
 
-class DiscOracle(BaseOracle):
+class DiscOracle(Oracle):
     def __init__(self, actions: List[DiscParserAction], pos_tags: List[NTLabel],
                  words: List[Word]) -> None:
         shift_cnt = sum(1 if isinstance(a, ShiftAction) else 0 for a in actions)
@@ -173,7 +173,7 @@ class DiscOracle(BaseOracle):
                 f"'{line}' is not a valid string for any discriminative parser action")
 
 
-class GenOracle(BaseOracle):
+class GenOracle(Oracle):
     def __init__(self, actions: List[GenParserAction], pos_tags: List[NTLabel]) -> None:
         gen_cnt = sum(1 if isinstance(a, GenAction) else 0 for a in actions)
         if len(pos_tags) != gen_cnt:
