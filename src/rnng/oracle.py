@@ -1,12 +1,22 @@
 import abc
-from typing import Iterable, List, Tuple, Union
+from typing import List, Union
+
+from nltk.tree import Tree
 
 
 NTLabel = str
 Word = str
 
 
-class ShiftAction:
+class Action:
+    __metaclass__ = abc.ABCMeta
+
+    @abc.abstractmethod
+    def __str__(self) -> str:
+        pass
+
+
+class ShiftAction(Action):
     def __str__(self) -> str:
         return 'SHIFT'
 
@@ -21,7 +31,7 @@ class ShiftAction:
             return cls()
 
 
-class ReduceAction:
+class ReduceAction(Action):
     def __str__(self) -> str:
         return 'REDUCE'
 
@@ -36,7 +46,7 @@ class ReduceAction:
             return cls()
 
 
-class NTAction:
+class NTAction(Action):
     def __init__(self, label: NTLabel) -> None:
         self.label = label
 
@@ -55,7 +65,7 @@ class NTAction:
             return cls(line[start:-1])
 
 
-class GenAction:
+class GenAction(Action):
     def __init__(self, word: Word) -> None:
         self.word = word
 
@@ -85,35 +95,28 @@ class BaseOracle:
     def __str__(self) -> str:
         pass
 
-    @classmethod
-    def get_children_spans(cls, line: str) -> Iterable[Tuple[int, int]]:
-        assert len(line) >= 2
-        assert line[0] == '('
-        assert line[-1] == ')'
-
-        counter = 0
-        for i, c in enumerate(line[1:-1], 1):
-            if c == '(':
-                counter += 1
-                if counter == 1:
-                    start = i
-            elif c == ')':
-                counter -= 1
-                if counter == 0:
-                    yield (start, i)
-
-        if counter > 0:
-            raise ValueError('unbalanced brackets (too many opening brackets)')
-        elif counter < 0:
-            raise ValueError('unbalanced brackets (too many closing brackets)')
-
     @abc.abstractclassmethod
-    def from_bracketed_string(cls, line: str):
+    def from_parsed_sent(cls, parsed_sent: Tree):
         pass
 
     @abc.abstractclassmethod
     def from_string(cls, line: str):
         pass
+
+    @abc.abstractclassmethod
+    def get_action_on_pos_node(cls, pos_node: Tree):
+        pass
+
+    @classmethod
+    def get_actions(cls, tree: Tree):
+        if len(tree) == 1 and not isinstance(tree[0], Tree):
+            return [cls.get_action_on_pos_node(tree)]  # noqa
+
+        actions: List[DiscParserAction] = [NTAction(tree.label())]
+        for child in tree:
+            actions.extend(cls.get_actions(child))
+        actions.append(ReduceAction())
+        return actions
 
 
 class DiscOracle(BaseOracle):
@@ -135,28 +138,16 @@ class DiscOracle(BaseOracle):
         return '\n'.join(out)
 
     @classmethod
-    def from_bracketed_string(cls, line: str) -> 'DiscOracle':
-        if len(line) < 2:
-            raise ValueError('string must have length at least 2 (open and close brackets)')
-        if line[0] != '(' or line[-1] != ')':
-            raise ValueError(
-                'string must begin and end with open and close bracket respectively')
+    def from_parsed_sent(cls, parsed_sent: Tree) -> 'DiscOracle':
+        actions = cls.get_actions(parsed_sent)
+        words, pos_tags = zip(*parsed_sent.pos())
+        return cls(actions, list(pos_tags), list(words))
 
-        spans = list(cls.get_children_spans(line))
-        if spans:
-            nt_label = line[1:line.find(' ')]
-            actions: List[DiscParserAction] = [NTAction(nt_label)]
-            pos_tags, words = [], []
-            for i, j in spans:
-                child_oracle = cls.from_bracketed_string(line[i:j+1])
-                actions.extend(child_oracle.actions)
-                pos_tags.extend(child_oracle.pos_tags)
-                words.extend(child_oracle.words)
-            actions.append(ReduceAction())
-            return cls(actions, pos_tags, words)
-        else:
-            pos_tag, word = line[1:-1].split()
-            return cls([ShiftAction()], [pos_tag], [word])
+    @classmethod
+    def get_action_on_pos_node(cls, pos_node: Tree) -> DiscParserAction:
+        if len(pos_node) != 1 or isinstance(pos_node[0], Tree):
+            raise ValueError('input is not a valid POS node')
+        return ShiftAction()
 
     @classmethod
     def from_string(cls, line: str) -> 'DiscOracle':
@@ -201,27 +192,16 @@ class GenOracle(BaseOracle):
         return [a.word for a in self.actions if isinstance(a, GenAction)]
 
     @classmethod
-    def from_bracketed_string(cls, line: str) -> 'GenOracle':
-        if len(line) < 2:
-            raise ValueError('string must have length at least 2 (open and close brackets)')
-        if line[0] != '(' or line[-1] != ')':
-            raise ValueError(
-                'string must begin and end with open and close bracket respectively')
+    def from_parsed_sent(cls, parsed_sent: Tree) -> 'GenOracle':
+        actions = cls.get_actions(parsed_sent)
+        _, pos_tags = zip(*parsed_sent.pos())
+        return cls(actions, list(pos_tags))
 
-        spans = list(cls.get_children_spans(line))
-        if spans:
-            nt_label = line[1:line.find(' ')]
-            actions: List[GenParserAction] = [NTAction(nt_label)]
-            pos_tags = []
-            for i, j in spans:
-                child_oracle = cls.from_bracketed_string(line[i:j+1])
-                actions.extend(child_oracle.actions)
-                pos_tags.extend(child_oracle.pos_tags)
-            actions.append(ReduceAction())
-            return cls(actions, pos_tags)
-        else:
-            pos_tag, word = line[1:-1].split()
-            return cls([GenAction(word)], [pos_tag])
+    @classmethod
+    def get_action_on_pos_node(cls, pos_node: Tree) -> GenParserAction:
+        if len(pos_node) != 1 or isinstance(pos_node[0], Tree):
+            raise ValueError('input is not a valid POS node')
+        return GenAction(pos_node[0])
 
     @classmethod
     def from_string(cls, line: str) -> 'GenOracle':

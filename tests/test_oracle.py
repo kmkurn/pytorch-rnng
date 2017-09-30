@@ -1,3 +1,4 @@
+from nltk.tree import Tree
 import pytest
 
 from rnng.oracle import ShiftAction, ReduceAction, NTAction, GenAction, DiscOracle, GenOracle
@@ -62,28 +63,19 @@ class TestGenAction:
 
 
 class TestDiscOracle:
-    def test_from_bracketed_string(self):
+    def test_from_parsed_sent(self):
         s = '(S (NP (NNP John)) (VP (VBZ loves) (NP (NNP Mary))))'
         expected_actions = ['NT(S)', 'NT(NP)', 'SHIFT', 'REDUCE', 'NT(VP)', 'SHIFT', 'NT(NP)',
                             'SHIFT', 'REDUCE', 'REDUCE', 'REDUCE']
         expected_pos_tags = ['NNP', 'VBZ', 'NNP']
         expected_words = ['John', 'loves', 'Mary']
 
-        oracle = DiscOracle.from_bracketed_string(s)
+        oracle = DiscOracle.from_parsed_sent(Tree.fromstring(s))
 
         assert isinstance(oracle, DiscOracle)
         assert [str(a) for a in oracle.actions] == expected_actions
         assert oracle.pos_tags == expected_pos_tags
         assert oracle.words == expected_words
-
-    def test_from_unbalanced_bracketed_string(self):
-        s = '(S (NP ((NNP John)))'
-        t = '(S (NP (NNP John))))'
-
-        with pytest.raises(ValueError):
-            DiscOracle.from_bracketed_string(s)
-        with pytest.raises(ValueError):
-            DiscOracle.from_bracketed_string(t)
 
     def test_from_string(self):
         s = 'asdf fdsa\nNNP VBZ\nNT(S)\nSHIFT\nSHIFT\nREDUCE'
@@ -103,28 +95,19 @@ class TestDiscOracle:
 
 
 class TestGenOracle:
-    def test_from_bracketed_string(self):
+    def test_from_parsed_sent(self):
         s = '(S (NP (NNP John)) (VP (VBZ loves) (NP (NNP Mary))))'
         expected_actions = ['NT(S)', 'NT(NP)', 'GEN(John)', 'REDUCE', 'NT(VP)', 'GEN(loves)',
                             'NT(NP)', 'GEN(Mary)', 'REDUCE', 'REDUCE', 'REDUCE']
         expected_words = ['John', 'loves', 'Mary']
         expected_pos_tags = ['NNP', 'VBZ', 'NNP']
 
-        oracle = GenOracle.from_bracketed_string(s)
+        oracle = GenOracle.from_parsed_sent(Tree.fromstring(s))
 
         assert isinstance(oracle, GenOracle)
         assert [str(a) for a in oracle.actions] == expected_actions
         assert oracle.words == expected_words
         assert oracle.pos_tags == expected_pos_tags
-
-    def test_from_unbalanced_bracketed_string(self):
-        s = '(S (NP ((NNP John)))'
-        t = '(S (NP (NNP John))))'
-
-        with pytest.raises(ValueError):
-            GenOracle.from_bracketed_string(s)
-        with pytest.raises(ValueError):
-            GenOracle.from_bracketed_string(t)
 
     def test_from_string(self):
         s = 'NNP VBZ\nNT(S)\nGEN(asdf)\nGEN(fdsa)\nREDUCE'
