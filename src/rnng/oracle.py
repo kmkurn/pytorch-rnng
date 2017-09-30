@@ -1,5 +1,6 @@
 import abc
 from typing import List, Union
+from typing import Type  # noqa
 
 from nltk.tree import Tree
 
@@ -13,6 +14,11 @@ class Action:
 
     @abc.abstractmethod
     def __str__(self) -> str:
+        pass
+
+    @classmethod
+    @abc.abstractmethod
+    def from_string(cls, line: str):
         pass
 
 
@@ -95,22 +101,25 @@ class Oracle:
     def __str__(self) -> str:
         pass
 
-    @abc.abstractclassmethod
+    @classmethod
+    @abc.abstractmethod
     def from_parsed_sent(cls, parsed_sent: Tree):
         pass
 
-    @abc.abstractclassmethod
+    @classmethod
+    @abc.abstractmethod
     def from_string(cls, line: str):
         pass
 
-    @abc.abstractclassmethod
+    @classmethod
+    @abc.abstractmethod
     def get_action_on_pos_node(cls, pos_node: Tree):
         pass
 
     @classmethod
     def get_actions(cls, tree: Tree):
         if len(tree) == 1 and not isinstance(tree[0], Tree):
-            return [cls.get_action_on_pos_node(tree)]  # noqa
+            return [cls.get_action_on_pos_node(tree)]
 
         actions: List[DiscParserAction] = [NTAction(tree.label())]
         for child in tree:
@@ -162,10 +171,10 @@ class DiscOracle(Oracle):
 
     @staticmethod
     def get_disc_action_from_string(line: str) -> DiscParserAction:
-        classes = [NTAction, ShiftAction, ReduceAction]
+        classes = [NTAction, ShiftAction, ReduceAction]  # type: List[Type[Action]]
         for cls in classes:
             try:
-                return cls.from_string(line)  # noqa
+                return cls.from_string(line)
             except ValueError:
                 continue
         else:
@@ -215,10 +224,10 @@ class GenOracle(Oracle):
 
     @staticmethod
     def get_gen_action_from_string(line: str) -> GenParserAction:
-        classes = [NTAction, GenAction, ReduceAction]
+        classes = [NTAction, GenAction, ReduceAction]  # type: List[Type[Action]]
         for cls in classes:
             try:
-                return cls.from_string(line)  # noqa
+                return cls.from_string(line)
             except ValueError:
                 continue
         else:
