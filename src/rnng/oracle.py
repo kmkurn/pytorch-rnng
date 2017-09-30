@@ -1,5 +1,5 @@
 import abc
-from typing import List, Union
+from typing import List, Sequence
 from typing import Type  # noqa
 
 from nltk.tree import Tree
@@ -90,38 +90,34 @@ class GenAction(Action):
             return cls(line[start:-1])
 
 
-DiscParserAction = Union[ShiftAction, ReduceAction, NTAction]
-GenParserAction = Union[GenAction, ReduceAction, NTAction]
-
-
 class Oracle:
-    __metaclass__ = abc.ABCMeta
+    def __init__(self, actions: Sequence[Action], pos_tags: Sequence[NTLabel],
+                 words: Sequence[Word]) -> None:
+        self.actions = actions
+        self.pos_tags = pos_tags
+        self.words = words
 
-    @abc.abstractmethod
     def __str__(self) -> str:
-        pass
+        raise NotImplementedError
 
     @classmethod
-    @abc.abstractmethod
-    def from_parsed_sent(cls, parsed_sent: Tree):
-        pass
+    def from_parsed_sent(cls, parsed_sent: Tree) -> 'Oracle':
+        raise NotImplementedError
 
     @classmethod
-    @abc.abstractmethod
-    def from_string(cls, line: str):
-        pass
+    def from_string(cls, line: str) -> 'Oracle':
+        raise NotImplementedError
 
     @classmethod
-    @abc.abstractmethod
-    def get_action_on_pos_node(cls, pos_node: Tree):
-        pass
+    def get_action_on_pos_node(cls, pos_node: Tree) -> Action:
+        raise NotImplementedError
 
     @classmethod
-    def get_actions(cls, tree: Tree):
+    def get_actions(cls, tree: Tree) -> List[Action]:
         if len(tree) == 1 and not isinstance(tree[0], Tree):
             return [cls.get_action_on_pos_node(tree)]
 
-        actions: List[DiscParserAction] = [NTAction(tree.label())]
+        actions: List[Action] = [NTAction(tree.label())]
         for child in tree:
             actions.extend(cls.get_actions(child))
         actions.append(ReduceAction())
@@ -129,17 +125,15 @@ class Oracle:
 
 
 class DiscOracle(Oracle):
-    def __init__(self, actions: List[DiscParserAction], pos_tags: List[NTLabel],
-                 words: List[Word]) -> None:
+    def __init__(self, actions: Sequence[Action], pos_tags: Sequence[NTLabel],
+                 words: Sequence[Word]) -> None:
         shift_cnt = sum(1 if isinstance(a, ShiftAction) else 0 for a in actions)
         if len(words) != shift_cnt:
             raise ValueError('number of words should match number of SHIFT actions')
         if len(pos_tags) != len(words):
             raise ValueError('number of POS tags should match number of words')
 
-        self.actions = actions
-        self.words = words
-        self.pos_tags = pos_tags
+        super().__init__(actions, pos_tags, words)
 
     def __str__(self) -> str:
         out = [' '.join(self.words), ' '.join(self.pos_tags)]
@@ -153,7 +147,7 @@ class DiscOracle(Oracle):
         return cls(actions, list(pos_tags), list(words))
 
     @classmethod
-    def get_action_on_pos_node(cls, pos_node: Tree) -> DiscParserAction:
+    def get_action_on_pos_node(cls, pos_node: Tree) -> ShiftAction:
         if len(pos_node) != 1 or isinstance(pos_node[0], Tree):
             raise ValueError('input is not a valid POS node')
         return ShiftAction()
@@ -166,11 +160,11 @@ class DiscOracle(Oracle):
 
         words = rows[0].strip().split()
         pos_tags = rows[1].strip().split()
-        actions = [cls.get_disc_action_from_string(a_str) for a_str in rows[2:]]
+        actions = [cls.get_action_from_string(a_str) for a_str in rows[2:]]
         return cls(actions, pos_tags, words)
 
     @staticmethod
-    def get_disc_action_from_string(line: str) -> DiscParserAction:
+    def get_action_from_string(line: str) -> Action:
         classes = [NTAction, ShiftAction, ReduceAction]  # type: List[Type[Action]]
         for cls in classes:
             try:
@@ -183,22 +177,18 @@ class DiscOracle(Oracle):
 
 
 class GenOracle(Oracle):
-    def __init__(self, actions: List[GenParserAction], pos_tags: List[NTLabel]) -> None:
+    def __init__(self, actions: Sequence[Action], pos_tags: Sequence[NTLabel]) -> None:
         gen_cnt = sum(1 if isinstance(a, GenAction) else 0 for a in actions)
         if len(pos_tags) != gen_cnt:
             raise ValueError('number of POS tags should match number of GEN actions')
 
-        self.actions = actions
-        self.pos_tags = pos_tags
+        words = [a.word for a in actions if isinstance(a, GenAction)]
+        super().__init__(actions, pos_tags, words)
 
     def __str__(self) -> str:
         out = [' '.join(self.pos_tags)]
         out.extend([str(a) for a in self.actions])
         return '\n'.join(out)
-
-    @property
-    def words(self) -> List[Word]:
-        return [a.word for a in self.actions if isinstance(a, GenAction)]
 
     @classmethod
     def from_parsed_sent(cls, parsed_sent: Tree) -> 'GenOracle':
@@ -207,7 +197,7 @@ class GenOracle(Oracle):
         return cls(actions, list(pos_tags))
 
     @classmethod
-    def get_action_on_pos_node(cls, pos_node: Tree) -> GenParserAction:
+    def get_action_on_pos_node(cls, pos_node: Tree) -> GenAction:
         if len(pos_node) != 1 or isinstance(pos_node[0], Tree):
             raise ValueError('input is not a valid POS node')
         return GenAction(pos_node[0])
@@ -219,11 +209,11 @@ class GenOracle(Oracle):
             raise ValueError('string must have at least 2 lines (POS tags, actions)')
 
         pos_tags = rows[0].strip().split()
-        actions = [cls.get_gen_action_from_string(a_str) for a_str in rows[1:]]
+        actions = [cls.get_action_from_string(a_str) for a_str in rows[1:]]
         return cls(actions, pos_tags)
 
     @staticmethod
-    def get_gen_action_from_string(line: str) -> GenParserAction:
+    def get_action_from_string(line: str) -> Action:
         classes = [NTAction, GenAction, ReduceAction]  # type: List[Type[Action]]
         for cls in classes:
             try:
