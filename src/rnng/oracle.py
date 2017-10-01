@@ -4,10 +4,7 @@ from typing import Type  # noqa
 
 from nltk.tree import Tree
 
-
-Word = str
-POSTag = str
-NTLabel = str
+from rnng.typing import Word, POSTag, NTLabel
 
 
 class Action:
