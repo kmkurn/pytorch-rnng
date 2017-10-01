@@ -5,8 +5,9 @@ from typing import Type  # noqa
 from nltk.tree import Tree
 
 
-NTLabel = str
 Word = str
+POSTag = str
+NTLabel = str
 
 
 class Action:
@@ -125,7 +126,7 @@ class Oracle:
 
 
 class DiscOracle(Oracle):
-    def __init__(self, actions: Sequence[Action], pos_tags: Sequence[NTLabel],
+    def __init__(self, actions: Sequence[Action], pos_tags: Sequence[POSTag],
                  words: Sequence[Word]) -> None:
         shift_cnt = sum(1 if isinstance(a, ShiftAction) else 0 for a in actions)
         if len(words) != shift_cnt:
@@ -179,7 +180,7 @@ class DiscOracle(Oracle):
 
 
 class GenOracle(Oracle):
-    def __init__(self, actions: Sequence[Action], pos_tags: Sequence[NTLabel]) -> None:
+    def __init__(self, actions: Sequence[Action], pos_tags: Sequence[POSTag]) -> None:
         gen_cnt = sum(1 if isinstance(a, GenAction) else 0 for a in actions)
         if len(pos_tags) != gen_cnt:
             raise ValueError('number of POS tags should match number of GEN actions')
