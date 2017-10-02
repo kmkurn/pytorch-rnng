@@ -2,7 +2,7 @@ import pytest
 import torch
 from torch.autograd import Variable
 
-from rnng.models import EmptyStackError, StackLSTM, log_softmax
+from rnng.models import DiscRNNGrammar, EmptyStackError, StackLSTM, log_softmax
 
 
 class MockLSTM:
@@ -117,3 +117,114 @@ def test_log_softmax():
     assert outputs.size() == (1, 5)
     nonzero_indices = outputs.view(-1).exp().data.nonzero().view(-1)
     assert all(nonzero_indices.eq(torch.LongTensor([1, 3, 4])))
+
+
+class TestDiscRNNGrammar:
+    word2id = {'John': 0, 'loves': 1, 'Mary': 2}
+    pos2id = {'NNP': 0, 'VBZ': 1}
+    nt2id = {'S': 0, 'NP': 1, 'VP': 2}
+    action2id = {'NT(S)': 0, 'NT(NP)': 1, 'NT(VP)': 2, 'SHIFT': 3, 'REDUCE': 4}
+    action2nt = {0: 0, 1: 1, 2: 2}
+
+    def test_init(self):
+        parser = DiscRNNGrammar(
+            len(self.word2id), len(self.pos2id), len(self.nt2id), len(self.action2id),
+            self.action2id['SHIFT'], self.action2nt)
+
+        assert len(parser.stack_buffer) == 0
+        assert len(parser.input_buffer) == 0
+        assert len(parser.action_history) == 0
+        assert parser.num_open_nt == 0
+
+    def test_init_state(self):
+        words = [self.word2id[w] for w in ['John', 'loves', 'Mary']]
+        pos_tags = [self.pos2id[p] for p in ['NNP', 'VBZ', 'NNP']]
+        parser = DiscRNNGrammar(
+            len(self.word2id), len(self.pos2id), len(self.nt2id), len(self.action2id),
+            self.action2id['SHIFT'], self.action2nt)
+
+        parser.init_state(zip(words, pos_tags))
+
+        assert len(parser.stack_buffer) == 0
+        assert parser.input_buffer == tuple(words)
+        assert len(parser.action_history) == 0
+        assert parser.num_open_nt == 0
+
+    def test_do_nt_action(self):
+        words = [self.word2id[w] for w in ['John', 'loves', 'Mary']]
+        pos_tags = [self.pos2id[p] for p in ['NNP', 'VBZ', 'NNP']]
+        parser = DiscRNNGrammar(
+            len(self.word2id), len(self.pos2id), len(self.nt2id), len(self.action2id),
+            self.action2id['SHIFT'], self.action2nt)
+        parser.init_state(zip(words, pos_tags))
+        prev_input_buffer = parser.input_buffer
+
+        parser.do_action(self.action2id['NT(S)'])
+
+        assert len(parser.stack_buffer) == 1
+        assert parser.stack_buffer[-1][1]  # an open NT
+        assert parser.input_buffer == prev_input_buffer
+        assert len(parser.action_history) == 1
+        assert parser.action_history[-1] == self.action2id['NT(S)']
+        assert parser.num_open_nt == 1
+
+    def test_do_shift_action(self):
+        words = [self.word2id[w] for w in ['John', 'loves', 'Mary']]
+        pos_tags = [self.pos2id[p] for p in ['NNP', 'VBZ', 'NNP']]
+        parser = DiscRNNGrammar(
+            len(self.word2id), len(self.pos2id), len(self.nt2id), len(self.action2id),
+            self.action2id['SHIFT'], self.action2nt)
+        parser.init_state(zip(words, pos_tags))
+        parser.do_action(self.action2id['NT(S)'])
+        parser.do_action(self.action2id['NT(NP)'])
+        prev_num_open_nt = parser.num_open_nt
+
+        parser.do_action(self.action2id['SHIFT'])
+
+        assert len(parser.stack_buffer) == 3
+        assert not parser.stack_buffer[-1][1]  # not an open NT
+        assert parser.input_buffer == tuple(words[1:])
+        assert len(parser.action_history) == 3
+        assert parser.action_history[-1] == self.action2id['SHIFT']
+        assert parser.num_open_nt == prev_num_open_nt
+
+    def test_do_reduce_action(self):
+        words = [self.word2id[w] for w in ['John', 'loves', 'Mary']]
+        pos_tags = [self.pos2id[p] for p in ['NNP', 'VBZ', 'NNP']]
+        parser = DiscRNNGrammar(
+            len(self.word2id), len(self.pos2id), len(self.nt2id), len(self.action2id),
+            self.action2id['SHIFT'], self.action2nt)
+        parser.init_state(zip(words, pos_tags))
+        parser.do_action(self.action2id['NT(S)'])
+        parser.do_action(self.action2id['NT(NP)'])
+        parser.do_action(self.action2id['SHIFT'])
+        prev_input_buffer = parser.input_buffer
+        prev_num_open_nt = parser.num_open_nt
+
+        parser.do_action(self.action2id['REDUCE'])
+
+        assert len(parser.stack_buffer) == 2
+        assert not parser.stack_buffer[-1][1]  # not an open NT
+        assert parser.input_buffer == prev_input_buffer
+        assert len(parser.action_history) == 4
+        assert parser.action_history[-1] == self.action2id['REDUCE']
+        assert parser.num_open_nt == prev_num_open_nt - 1
+
+    def test_forward(self):
+        words = [self.word2id[w] for w in ['John', 'loves', 'Mary']]
+        pos_tags = [self.pos2id[p] for p in ['NNP', 'VBZ', 'NNP']]
+        parser = DiscRNNGrammar(
+            len(self.word2id), len(self.pos2id), len(self.nt2id), len(self.action2id),
+            self.action2id['SHIFT'], self.action2nt)
+        parser.init_state(zip(words, pos_tags))
+        parser.do_action(self.action2id['NT(S)'])
+        parser.do_action(self.action2id['NT(NP)'])
+        parser.do_action(self.action2id['SHIFT'])
+        parser.do_action(self.action2id['REDUCE'])
+
+        action_logprobs = parser()
+
+        assert isinstance(action_logprobs, Variable)
+        assert action_logprobs.size() == (len(self.action2id),)
+        sum_prob = action_logprobs.exp().sum().data[0]
+        assert 0.999 <= sum_prob and sum_prob <= 1.001
