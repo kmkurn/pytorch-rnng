@@ -27,12 +27,12 @@ class StackLSTM(nn.Module):
         self.hidden_size = hidden_size
         self.num_layers = num_layers
         self.dropout = dropout
+        self.lstm = nn.LSTM(input_size, hidden_size, num_layers=num_layers, dropout=dropout)
         self.h0 = nn.Parameter(torch.Tensor(num_layers, self.BATCH_SIZE, hidden_size))
         self.c0 = nn.Parameter(torch.Tensor(num_layers, self.BATCH_SIZE, hidden_size))
         init_states = (self.h0, self.c0)
         self._states_hist = [init_states]
         self._outputs_hist = []  # type: List[Variable]
-        self._lstm = nn.LSTM(input_size, hidden_size, num_layers=num_layers, dropout=dropout)
 
     def forward(self, inputs: Variable) -> Tuple[Variable, Variable]:
         # inputs: input_size
@@ -40,7 +40,7 @@ class StackLSTM(nn.Module):
 
         # Set seq_len and batch_size to 1
         inputs = inputs.view(self.SEQ_LEN, self.BATCH_SIZE, inputs.numel())
-        next_outputs, next_states = self._lstm(inputs, self._states_hist[-1])
+        next_outputs, next_states = self.lstm(inputs, self._states_hist[-1])
         self._states_hist.append(next_states)
         self._outputs_hist.append(next_outputs)
         return next_states
