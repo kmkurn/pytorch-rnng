@@ -96,6 +96,9 @@ class DiscRNNGrammar(nn.Module):
                  word_dim: int = 32, pos_dim: int = 12, nt_dim: int = 60, action_dim: int = 16,
                  input_dim: int = 128, hidden_dim: int = 128, num_layers: int = 2,
                  dropout: float = .0) -> None:
+        if shift_action in action2nt:
+            raise ValueError('SHIFT action cannot also be NT(X) action')
+
         super().__init__()
         self.num_words = num_words
         self.num_pos = num_pos
@@ -192,7 +195,7 @@ class DiscRNNGrammar(nn.Module):
     def num_open_nt(self) -> int:
         return sum(tuple(zip(*self._stack))[1]) if self._stack else 0
 
-    def init_state(self, tagged_words: Sequence[Tuple[WordId, POSId]]) -> None:
+    def start(self, tagged_words: Sequence[Tuple[WordId, POSId]]) -> None:
         self._stack = []
         self._buffer = []
         self._history = []
@@ -212,26 +215,19 @@ class DiscRNNGrammar(nn.Module):
             self.buffer_lstm.push(self._word_emb[word])
 
     def do_action(self, action: ActionId) -> None:
-        if action == self.shift_action:
-            if self._buffer == 0:
-                raise RuntimeError('cannot SHIFT when input buffer is empty')
-            if self.num_open_nt == 0:
-                raise RuntimeError('cannot SHIFT when no open nonterminal exists')
+        legal, message = self._is_legal(action)
+        if not legal:
+            raise RuntimeError(message)
 
-            word = self._buffer.pop()
+        if action == self.shift_action:
+            assert len(self._buffer) > 0
             assert len(self.buffer_lstm) > 0
+            word = self._buffer.pop()
             self.buffer_lstm.pop()
             assert word in self._word_emb
             self._stack.append(StackElement(self._word_emb[word], False))
             self.stack_lstm.push(self._word_emb[word])
-
         elif action in self.action2nt:
-            if len(self._buffer) == 0:
-                raise RuntimeError(
-                    'cannot introduce new nonterminal when input buffer is empty')
-            if self.num_open_nt >= self.MAX_OPEN_NT:
-                raise RuntimeError('max number of open nonterminals reached')
-
             nonterm = self.action2nt[action]
             try:
                 self._stack.append(StackElement(self._nt_emb[nonterm], True))
@@ -239,17 +235,11 @@ class DiscRNNGrammar(nn.Module):
             except KeyError:
                 raise KeyError('cannot find embedding for the nonterminal; '
                                'perhaps you forgot to call .init_state() beforehand?')
-
         else:  # REDUCE
-            if len(self._stack) > 0 and self._stack[-1].is_open_nt:
-                raise RuntimeError('cannot REDUCE when top of stack is an open nonterminal')
-            if self.num_open_nt < 2 and len(self._buffer) > 0:
-                raise RuntimeError('cannot REDUCE when there are words not yet SHIFT-ed')
-
             children_emb = []
             while len(self._stack) > 0 and not self._stack[-1].is_open_nt:
                 children_emb.append(self._stack.pop().emb)
-
+            assert len(children_emb) > 0
             assert len(self._stack) > 0
             open_nt_emb = self._stack.pop().emb
             composed_emb = self._compose(open_nt_emb, list(reversed(children_emb)))
@@ -265,7 +255,7 @@ class DiscRNNGrammar(nn.Module):
         ]).view(1, -1)
         parser_summary = self.lstms2summary(lstms_emb)
         return log_softmax(self.summary2actions(parser_summary),
-                           restrictions=self._get_invalid_actions()).view(-1)
+                           restrictions=self._get_illegal_actions()).view(-1)
 
     def _prepare_embeddings(self, words: Collection[WordId], pos_tags: Collection[POSId]):
         assert len(words) == len(pos_tags)
@@ -309,21 +299,36 @@ class DiscRNNGrammar(nn.Module):
         bwd_emb = F.dropout(bwd_output[-1, 0], p=self.dropout, training=self.training)
         return self.compose2final(torch.cat([fwd_emb, bwd_emb]).view(1, -1)).view(-1)
 
-    def _get_invalid_actions(self):
-        invalid_actions = [action for action in range(self.num_actions)
-                           if not self._is_valid_action(action)]
-        return self._new(invalid_actions).long()
+    def _get_illegal_actions(self):
+        illegal_actions = [action for action in range(self.num_actions)
+                           if not self._is_legal(action)[0]]
+        return self._new(illegal_actions).long()
 
-    def _is_valid_action(self, action: ActionId) -> bool:
+    def _is_legal(self, action: ActionId) -> Tuple[bool, str]:
         nt_actions = self.action2nt.keys()
         n = self.num_open_nt
         if action in nt_actions:
-            return len(self._buffer) > 0 and n < self.MAX_OPEN_NT
+            if len(self._buffer) == 0:
+                return False, 'cannot do NT(X) when input buffer is empty'
+            elif n >= self.MAX_OPEN_NT:
+                return False, 'max number of open nonterminals is reached'
+            else:
+                return True, ''
         elif action == self.shift_action:
-            return len(self._buffer) > 0 and n > 0
-        else:
+            if len(self._buffer) == 0:
+                return False, 'cannot SHIFT when input buffer is empty'
+            elif n == 0:
+                return False, 'cannot SHIFT when no open nonterminal exists'
+            else:
+                return True, ''
+        else:  # REDUCE
             last_is_nt = len(self._history) > 0 and self._history[-1] in nt_actions
-            return not last_is_nt and (n >= 2 or len(self._buffer) == 0)
+            if last_is_nt:
+                return False, 'cannot REDUCE when top of stack is an open nonterminal'
+            elif n < 2 and len(self._buffer) > 0:
+                return False, 'cannot REDUCE because there are words not SHIFT-ed yet'
+            else:
+                return True, ''
 
     def reset_parameters(self) -> None:
         # Stack LSTMs

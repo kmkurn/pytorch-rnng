@@ -136,14 +136,14 @@ class TestDiscRNNGrammar:
         assert len(parser.action_history) == 0
         assert parser.num_open_nt == 0
 
-    def test_init_state(self):
+    def test_start(self):
         words = [self.word2id[w] for w in ['John', 'loves', 'Mary']]
         pos_tags = [self.pos2id[p] for p in ['NNP', 'VBZ', 'NNP']]
         parser = DiscRNNGrammar(
             len(self.word2id), len(self.pos2id), len(self.nt2id), len(self.action2id),
             self.action2id['SHIFT'], self.action2nt)
 
-        parser.init_state(zip(words, pos_tags))
+        parser.start(zip(words, pos_tags))
 
         assert len(parser.stack_buffer) == 0
         assert parser.input_buffer == tuple(words)
@@ -156,13 +156,13 @@ class TestDiscRNNGrammar:
         parser = DiscRNNGrammar(
             len(self.word2id), len(self.pos2id), len(self.nt2id), len(self.action2id),
             self.action2id['SHIFT'], self.action2nt)
-        parser.init_state(zip(words, pos_tags))
+        parser.start(zip(words, pos_tags))
         prev_input_buffer = parser.input_buffer
 
         parser.do_action(self.action2id['NT(S)'])
 
         assert len(parser.stack_buffer) == 1
-        assert parser.stack_buffer[-1][1]  # an open NT
+        assert parser.stack_buffer[-1].is_open_nt
         assert parser.input_buffer == prev_input_buffer
         assert len(parser.action_history) == 1
         assert parser.action_history[-1] == self.action2id['NT(S)']
@@ -174,7 +174,7 @@ class TestDiscRNNGrammar:
         parser = DiscRNNGrammar(
             len(self.word2id), len(self.pos2id), len(self.nt2id), len(self.action2id),
             self.action2id['SHIFT'], self.action2nt)
-        parser.init_state(zip(words, pos_tags))
+        parser.start(zip(words, pos_tags))
         parser.do_action(self.action2id['NT(S)'])
         parser.do_action(self.action2id['NT(NP)'])
         prev_num_open_nt = parser.num_open_nt
@@ -182,7 +182,7 @@ class TestDiscRNNGrammar:
         parser.do_action(self.action2id['SHIFT'])
 
         assert len(parser.stack_buffer) == 3
-        assert not parser.stack_buffer[-1][1]  # not an open NT
+        assert not parser.stack_buffer[-1].is_open_nt
         assert parser.input_buffer == tuple(words[1:])
         assert len(parser.action_history) == 3
         assert parser.action_history[-1] == self.action2id['SHIFT']
@@ -194,7 +194,7 @@ class TestDiscRNNGrammar:
         parser = DiscRNNGrammar(
             len(self.word2id), len(self.pos2id), len(self.nt2id), len(self.action2id),
             self.action2id['SHIFT'], self.action2nt)
-        parser.init_state(zip(words, pos_tags))
+        parser.start(zip(words, pos_tags))
         parser.do_action(self.action2id['NT(S)'])
         parser.do_action(self.action2id['NT(NP)'])
         parser.do_action(self.action2id['SHIFT'])
@@ -204,7 +204,7 @@ class TestDiscRNNGrammar:
         parser.do_action(self.action2id['REDUCE'])
 
         assert len(parser.stack_buffer) == 2
-        assert not parser.stack_buffer[-1][1]  # not an open NT
+        assert not parser.stack_buffer[-1].is_open_nt
         assert parser.input_buffer == prev_input_buffer
         assert len(parser.action_history) == 4
         assert parser.action_history[-1] == self.action2id['REDUCE']
@@ -216,7 +216,7 @@ class TestDiscRNNGrammar:
         parser = DiscRNNGrammar(
             len(self.word2id), len(self.pos2id), len(self.nt2id), len(self.action2id),
             self.action2id['SHIFT'], self.action2nt)
-        parser.init_state(zip(words, pos_tags))
+        parser.start(zip(words, pos_tags))
         parser.do_action(self.action2id['NT(S)'])
         parser.do_action(self.action2id['NT(NP)'])
         parser.do_action(self.action2id['SHIFT'])
