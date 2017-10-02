@@ -4,6 +4,7 @@ from typing import List  # noqa
 
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 import torch.nn.init as init
 from torch.autograd import Variable
 
@@ -78,3 +79,16 @@ class StackLSTM(nn.Module, Sized):
 
     def __len__(self):
         return len(self._outputs_hist)
+
+
+def log_softmax(inputs: Variable, restrictions=None) -> Variable:
+    if restrictions is None:
+        return F.log_softmax(inputs)
+
+    if restrictions.dim() != 1:
+        raise RuntimeError('restrictions must be one dimensional')
+
+    addend = Variable(
+        inputs.data.new(inputs.size()).zero_().index_fill_(
+            inputs.dim() - 1, restrictions, -float('inf')))
+    return F.log_softmax(inputs + addend)

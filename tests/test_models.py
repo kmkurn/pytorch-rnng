@@ -2,7 +2,7 @@ import pytest
 import torch
 from torch.autograd import Variable
 
-from rnng.models import StackLSTM, EmptyStackError
+from rnng.models import EmptyStackError, StackLSTM, log_softmax
 
 
 class MockLSTM:
@@ -105,3 +105,15 @@ class TestStackLSTM:
     def test_num_layers_too_low(self):
         with pytest.raises(ValueError):
             StackLSTM(10, 5, num_layers=0)
+
+
+def test_log_softmax():
+    restrictions = torch.LongTensor([0, 2])
+    inputs = Variable(torch.randn(1, 5))
+
+    outputs = log_softmax(inputs, restrictions)
+
+    assert isinstance(outputs, Variable)
+    assert outputs.size() == (1, 5)
+    nonzero_indices = outputs.view(-1).exp().data.nonzero().view(-1)
+    assert all(nonzero_indices.eq(torch.LongTensor([1, 3, 4])))
