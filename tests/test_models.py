@@ -39,15 +39,19 @@ class TestStackLSTM:
 
         lstm = StackLSTM(self.input_size, self.hidden_size, num_layers=self.num_layers)
 
+        assert len(lstm) == 0
         h, c = lstm(inputs[0])
         assert torch.equal(h.data, mock_lstm.retvals[0][1][0].data)
         assert torch.equal(c.data, mock_lstm.retvals[0][1][1].data)
+        assert len(lstm) == 1
         h, c = lstm(inputs[1])
         assert torch.equal(h.data, mock_lstm.retvals[1][1][0].data)
         assert torch.equal(c.data, mock_lstm.retvals[1][1][1].data)
+        assert len(lstm) == 2
         h, c = lstm(inputs[2])
         assert torch.equal(h.data, mock_lstm.retvals[2][1][0].data)
         assert torch.equal(c.data, mock_lstm.retvals[2][1][1].data)
+        assert len(lstm) == 3
 
     def test_top(self, mocker):
         mock_lstm = MockLSTM(self.input_size, self.hidden_size, num_layers=self.num_layers)
@@ -78,14 +82,17 @@ class TestStackLSTM:
         assert torch.equal(h.data, mock_lstm.retvals[2][1][0].data)
         assert torch.equal(c.data, mock_lstm.retvals[2][1][1].data)
         assert torch.equal(lstm.top.data, mock_lstm.retvals[1][0].data.squeeze())
+        assert len(lstm) == 2
         h, c = lstm.pop()
         assert torch.equal(h.data, mock_lstm.retvals[1][1][0].data)
         assert torch.equal(c.data, mock_lstm.retvals[1][1][1].data)
         assert torch.equal(lstm.top.data, mock_lstm.retvals[0][0].data.squeeze())
+        assert len(lstm) == 1
         h, c = lstm.pop()
         assert torch.equal(h.data, mock_lstm.retvals[0][1][0].data)
         assert torch.equal(c.data, mock_lstm.retvals[0][1][1].data)
         assert lstm.top is None
+        assert len(lstm) == 0
 
     def test_pop_when_empty(self, mocker):
         mock_lstm = MockLSTM(self.input_size, self.hidden_size, num_layers=self.num_layers)

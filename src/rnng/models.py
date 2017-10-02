@@ -13,7 +13,7 @@ class EmptyStackError(Exception):
         super().__init__('stack is already empty')
 
 
-class StackLSTM(nn.Module):
+class StackLSTM(nn.Module, Sized):
     BATCH_SIZE = 1
     SEQ_LEN = 1
 
@@ -75,3 +75,6 @@ class StackLSTM(nn.Module):
         res = ('{}(input_size={input_size}, hidden_size={hidden_size}, '
                'num_layers={num_layers}, dropout={dropout})')
         return res.format(self.__class__.__name__, **self.__dict__)
+
+    def __len__(self):
+        return len(self._outputs_hist)
