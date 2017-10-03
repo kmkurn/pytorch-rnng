@@ -117,7 +117,7 @@ class DiscRNNGrammar(nn.Module):
 
         # Parser states
         self._stack = []  # type: List[StackElement]
-        self._buffer = []  # type: List[Tuple[WordId, POSId]]
+        self._buffer = []  # type: List[WordId]
         self._history = []  # type: List[ActionId]
 
         # Parser state encoders
@@ -219,7 +219,7 @@ class DiscRNNGrammar(nn.Module):
         if not legal:
             raise RuntimeError(message)
 
-        if action == self.shift_action:
+        if action == self.shift_action:  # SHIFT
             assert len(self._buffer) > 0
             assert len(self.buffer_lstm) > 0
             word = self._buffer.pop()
@@ -227,14 +227,14 @@ class DiscRNNGrammar(nn.Module):
             assert word in self._word_emb
             self._stack.append(StackElement(self._word_emb[word], False))
             self.stack_lstm.push(self._word_emb[word])
-        elif action in self.action2nt:
+        elif action in self.action2nt:  # NT(X)
             nonterm = self.action2nt[action]
             try:
                 self._stack.append(StackElement(self._nt_emb[nonterm], True))
                 self.stack_lstm.push(self._nt_emb[nonterm])
             except KeyError:
                 raise KeyError('cannot find embedding for the nonterminal; '
-                               'perhaps you forgot to call .init_state() beforehand?')
+                               'perhaps you forgot to call .start() beforehand?')
         else:  # REDUCE
             children_emb = []
             while len(self._stack) > 0 and not self._stack[-1].is_open_nt:
@@ -246,8 +246,11 @@ class DiscRNNGrammar(nn.Module):
             self._stack.append(StackElement(composed_emb, False))
 
         self._history.append(action)
-        assert action in self._action_emb
-        self.history_lstm.push(self._action_emb[action])
+        try:
+            self.history_lstm.push(self._action_emb[action])
+        except KeyError:
+            raise KeyError('cannot find embedding for the action; '
+                           'perhaps you forgot to call .start() beforehand?')
 
     def forward(self):
         lstms_emb = torch.cat([
@@ -307,14 +310,14 @@ class DiscRNNGrammar(nn.Module):
     def _is_legal(self, action: ActionId) -> Tuple[bool, str]:
         nt_actions = self.action2nt.keys()
         n = self.num_open_nt
-        if action in nt_actions:
+        if action in nt_actions:  # NT(X)
             if len(self._buffer) == 0:
                 return False, 'cannot do NT(X) when input buffer is empty'
             elif n >= self.MAX_OPEN_NT:
                 return False, 'max number of open nonterminals is reached'
             else:
                 return True, ''
-        elif action == self.shift_action:
+        elif action == self.shift_action:  # SHIFT
             if len(self._buffer) == 0:
                 return False, 'cannot SHIFT when input buffer is empty'
             elif n == 0:
