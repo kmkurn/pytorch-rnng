@@ -1,3 +1,4 @@
+import abc
 from collections import OrderedDict
 from typing import Collection, Mapping, NamedTuple, Sequence, Sized, Tuple, Union
 from typing import Dict, List  # noqa
@@ -92,7 +93,34 @@ class StackElement(NamedTuple):
     is_open_nt: bool
 
 
-class DiscRNNGrammar(nn.Module):
+class RNNGrammar(nn.Module):
+    __metaclass__ = abc.ABCMeta
+
+    @property
+    @abc.abstractmethod
+    def stack_buffer(self) -> Sequence[Union[Tree, WordId]]:
+        pass
+
+    @property
+    @abc.abstractmethod
+    def action_history(self) -> Sequence[ActionId]:
+        pass
+
+    @property
+    @abc.abstractmethod
+    def finished(self) -> bool:
+        pass
+
+    @abc.abstractmethod
+    def start(self, tagged_words: Sequence[Tuple[WordId, POSId]]) -> None:
+        pass
+
+    @abc.abstractmethod
+    def do_action(self, action: ActionId) -> None:
+        pass
+
+
+class DiscRNNGrammar(RNNGrammar):
     MAX_OPEN_NT = 100
 
     def __init__(self, num_words: int, num_pos: int, num_nt: int, num_actions: int,
