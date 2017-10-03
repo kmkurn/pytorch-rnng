@@ -308,8 +308,11 @@ class DiscRNNGrammar(RNNGrammar):
             self.stack_lstm.top, self.buffer_lstm.top, self.history_lstm.top
         ]).view(1, -1)
         parser_summary = self.lstms2summary(lstms_emb)
+        illegal_actions = self._get_illegal_actions()
+        if illegal_actions.dim() == 0:
+            illegal_actions = None
         return log_softmax(self.summary2actions(parser_summary),
-                           restrictions=self._get_illegal_actions()).view(-1)
+                           restrictions=illegal_actions).view(-1)
 
     def _prepare_embeddings(self, words: Collection[WordId], pos_tags: Collection[POSId]):
         assert len(words) == len(pos_tags)
