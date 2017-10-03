@@ -91,6 +91,21 @@ class GenAction(Action):
 class Oracle:
     __metaclass__ = abc.ABCMeta
 
+    @property
+    @abc.abstractmethod
+    def actions(self) -> List[Action]:
+        pass
+
+    @property
+    @abc.abstractmethod
+    def pos_tags(self) -> List[POSTag]:
+        pass
+
+    @property
+    @abc.abstractmethod
+    def words(self) -> List[Word]:
+        pass
+
     @abc.abstractmethod
     def __str__(self) -> str:
         pass
@@ -131,13 +146,25 @@ class DiscOracle(Oracle):
         if len(pos_tags) != len(words):
             raise ValueError('number of POS tags should match number of words')
 
-        self.actions = actions
-        self.pos_tags = pos_tags
-        self.words = words
+        self._actions = actions
+        self._pos_tags = pos_tags
+        self._words = words
+
+    @property
+    def actions(self) -> List[Action]:
+        return list(self._actions)
+
+    @property
+    def pos_tags(self) -> List[POSTag]:
+        return list(self._pos_tags)
+
+    @property
+    def words(self) -> List[Word]:
+        return list(self._words)
 
     def __str__(self) -> str:
-        out = [' '.join(self.words), ' '.join(self.pos_tags)]
-        out.extend([str(a) for a in self.actions])
+        out = [' '.join(self._words), ' '.join(self._pos_tags)]
+        out.extend([str(a) for a in self._actions])
         return '\n'.join(out)
 
     @classmethod
@@ -182,17 +209,25 @@ class GenOracle(Oracle):
         if len(pos_tags) != gen_cnt:
             raise ValueError('number of POS tags should match number of GEN actions')
 
-        self.actions = actions
-        self.pos_tags = pos_tags
+        self._actions = actions
+        self._pos_tags = pos_tags
 
-    def __str__(self) -> str:
-        out = [' '.join(self.pos_tags)]
-        out.extend([str(a) for a in self.actions])
-        return '\n'.join(out)
+    @property
+    def actions(self) -> List[Action]:
+        return list(self._actions)
+
+    @property
+    def pos_tags(self) -> List[POSTag]:
+        return list(self._pos_tags)
 
     @property
     def words(self) -> List[Word]:
         return [a.word for a in self.actions if isinstance(a, GenAction)]
+
+    def __str__(self) -> str:
+        out = [' '.join(self._pos_tags)]
+        out.extend([str(a) for a in self._actions])
+        return '\n'.join(out)
 
     @classmethod
     def from_parsed_sent(cls, parsed_sent: Tree) -> 'GenOracle':
