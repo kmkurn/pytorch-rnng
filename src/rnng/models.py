@@ -196,6 +196,12 @@ class DiscRNNGrammar(nn.Module):
     def num_open_nt(self) -> int:
         return self._num_open_nt
 
+    @property
+    def finished(self) -> bool:
+        return (len(self._stack) == 1
+                and not self._stack[0].is_open_nt
+                and len(self._buffer) == 0)
+
     def start(self, tagged_words: Sequence[Tuple[WordId, POSId]]) -> None:
         self._stack = []
         self._buffer = []

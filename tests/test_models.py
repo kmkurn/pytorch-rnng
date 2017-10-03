@@ -135,6 +135,7 @@ class TestDiscRNNGrammar:
         assert len(parser.input_buffer) == 0
         assert len(parser.action_history) == 0
         assert parser.num_open_nt == 0
+        assert not parser.finished
 
     def test_start(self):
         words = [self.word2id[w] for w in ['John', 'loves', 'Mary']]
@@ -149,6 +150,7 @@ class TestDiscRNNGrammar:
         assert parser.input_buffer == tuple(words)
         assert len(parser.action_history) == 0
         assert parser.num_open_nt == 0
+        assert not parser.finished
 
     def test_do_nt_action(self):
         words = [self.word2id[w] for w in ['John', 'loves', 'Mary']]
@@ -167,6 +169,7 @@ class TestDiscRNNGrammar:
         assert len(parser.action_history) == 1
         assert parser.action_history[-1] == self.action2id['NT(S)']
         assert parser.num_open_nt == 1
+        assert not parser.finished
 
     def test_do_shift_action(self):
         words = [self.word2id[w] for w in ['John', 'loves', 'Mary']]
@@ -187,6 +190,7 @@ class TestDiscRNNGrammar:
         assert len(parser.action_history) == 3
         assert parser.action_history[-1] == self.action2id['SHIFT']
         assert parser.num_open_nt == prev_num_open_nt
+        assert not parser.finished
 
     def test_do_reduce_action(self):
         words = [self.word2id[w] for w in ['John', 'loves', 'Mary']]
@@ -209,6 +213,7 @@ class TestDiscRNNGrammar:
         assert len(parser.action_history) == 4
         assert parser.action_history[-1] == self.action2id['REDUCE']
         assert parser.num_open_nt == prev_num_open_nt - 1
+        assert not parser.finished
 
     def test_forward(self):
         words = [self.word2id[w] for w in ['John', 'loves', 'Mary']]
@@ -228,3 +233,25 @@ class TestDiscRNNGrammar:
         assert action_logprobs.size() == (len(self.action2id),)
         sum_prob = action_logprobs.exp().sum().data[0]
         assert 0.999 <= sum_prob and sum_prob <= 1.001
+
+    def test_finished(self):
+        words = [self.word2id[w] for w in ['John', 'loves', 'Mary']]
+        pos_tags = [self.pos2id[p] for p in ['NNP', 'VBZ', 'NNP']]
+        parser = DiscRNNGrammar(
+            len(self.word2id), len(self.pos2id), len(self.nt2id), len(self.action2id),
+            self.action2id['SHIFT'], self.action2nt)
+
+        parser.start(zip(words, pos_tags))
+        parser.do_action(self.action2id['NT(S)'])
+        parser.do_action(self.action2id['NT(NP)'])
+        parser.do_action(self.action2id['SHIFT'])
+        parser.do_action(self.action2id['REDUCE'])
+        parser.do_action(self.action2id['NT(VP)'])
+        parser.do_action(self.action2id['SHIFT'])
+        parser.do_action(self.action2id['NT(NP)'])
+        parser.do_action(self.action2id['SHIFT'])
+        parser.do_action(self.action2id['REDUCE'])
+        parser.do_action(self.action2id['REDUCE'])
+        parser.do_action(self.action2id['REDUCE'])
+
+        assert parser.finished
