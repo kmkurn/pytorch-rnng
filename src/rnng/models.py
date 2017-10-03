@@ -254,8 +254,6 @@ class DiscRNNGrammar(RNNGrammar):
             self.buffer_lstm.push(self._word_emb[word])
 
     def do_action(self, action: ActionId) -> None:
-        if self.finished:
-            raise RuntimeError('parsing algorithm already finished, cannot do more action')
         legal, message = self._is_legal(action)
         if not legal:
             raise RuntimeError(message)
@@ -361,6 +359,9 @@ class DiscRNNGrammar(RNNGrammar):
         return self._new(illegal_actions).long()
 
     def _is_legal(self, action: ActionId) -> Tuple[bool, str]:
+        if self.finished:
+            return False, 'parsing algorithm already finished, cannot do more action'
+
         nt_actions = self.action2nt.keys()
         n = self.num_open_nt
         if action in nt_actions:  # NT(X)
