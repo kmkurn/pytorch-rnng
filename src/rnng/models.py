@@ -119,6 +119,7 @@ class DiscRNNGrammar(nn.Module):
         self._stack = []  # type: List[StackElement]
         self._buffer = []  # type: List[WordId]
         self._history = []  # type: List[ActionId]
+        self._num_open_nt = 0
 
         # Parser state encoders
         self.stack_lstm = StackLSTM(
@@ -193,7 +194,7 @@ class DiscRNNGrammar(nn.Module):
 
     @property
     def num_open_nt(self) -> int:
-        return sum(tuple(zip(*self._stack))[1]) if self._stack else 0
+        return self._num_open_nt
 
     def start(self, tagged_words: Sequence[Tuple[WordId, POSId]]) -> None:
         self._stack = []
@@ -235,6 +236,8 @@ class DiscRNNGrammar(nn.Module):
             except KeyError:
                 raise KeyError('cannot find embedding for the nonterminal; '
                                'perhaps you forgot to call .start() beforehand?')
+            else:
+                self._num_open_nt += 1
         else:  # REDUCE
             children_emb = []
             while len(self._stack) > 0 and not self._stack[-1].is_open_nt:
@@ -244,6 +247,7 @@ class DiscRNNGrammar(nn.Module):
             open_nt_emb = self._stack.pop().emb
             composed_emb = self._compose(open_nt_emb, list(reversed(children_emb)))
             self._stack.append(StackElement(composed_emb, False))
+            self._num_open_nt -= 1
 
         self._history.append(action)
         try:
