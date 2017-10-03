@@ -109,6 +109,10 @@ class Oracle:
     def words(self) -> List[Word]:
         pass
 
+    @words.setter
+    def words(self, new_words: List[Word]) -> None:
+        pass
+
     @abc.abstractmethod
     def __str__(self) -> str:
         pass
@@ -164,6 +168,12 @@ class DiscOracle(Oracle):
     @property
     def words(self) -> List[Word]:
         return list(self._words)
+
+    @words.setter
+    def words(self, new_words: Sequence[Word]) -> None:
+        if len(new_words) != len(self._words):
+            raise ValueError('number of words should not change')
+        self._words = new_words
 
     def __str__(self) -> str:
         out = [' '.join(self._words), ' '.join(self._pos_tags)]
@@ -226,6 +236,18 @@ class GenOracle(Oracle):
     @property
     def words(self) -> List[Word]:
         return [a.word for a in self.actions if isinstance(a, GenAction)]
+
+    @words.setter
+    def words(self, new_words: Sequence[Word]) -> None:
+        if len(new_words) != len(self.words):
+            raise ValueError('number of words should not change')
+
+        i = 0
+        for word in new_words:
+            while i < len(self._actions) and not isinstance(self._actions[i], GenAction):
+                i += 1
+            assert i < len(self._actions)
+            self._actions[i].word = word  # type: ignore
 
     def __str__(self) -> str:
         out = [' '.join(self._pos_tags)]
