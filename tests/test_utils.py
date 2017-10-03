@@ -1,6 +1,6 @@
 from nltk.tree import Tree
 
-from rnng.utils import TermStore, ParseTreeMapper
+from rnng.utils import TermStore, ParseTreeMapper, MeanAggregate
 
 
 class TestTermStore:
@@ -70,3 +70,27 @@ class TestParseTreeMapper:
         mapper = ParseTreeMapper(self.word2id, self.nt2id)
 
         assert str(mapper(parse_tree)) == str(exp_parse_tree)
+
+
+class TestMeanAggregate:
+    tol = 1e-4
+
+    def is_close_to(self, x, y):
+        return y - self.tol <= x and x <= y + self.tol
+
+    def test_init(self):
+        agg = MeanAggregate()
+
+        assert self.is_close_to(agg.total, 0.)
+        assert self.is_close_to(agg.count, 0.)
+        assert self.is_close_to(agg.mean, 0.)
+
+    def test_update(self):
+        agg = MeanAggregate()
+        agg.update(1.)
+        agg.update(2.)
+        agg.update(3.)
+
+        assert self.is_close_to(agg.total, 6.)
+        assert self.is_close_to(agg.count, 3.)
+        assert self.is_close_to(agg.mean, 2.)

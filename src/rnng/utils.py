@@ -56,3 +56,20 @@ class ParseTreeMapper:
         else:
             children = [self._map(child) for child in root]
             return Tree(self._id2nt[root.label()], children)
+
+
+class MeanAggregate:
+    def __init__(self) -> None:
+        self.reset()
+
+    @property
+    def mean(self) -> float:
+        return self.total / self.count if self.count else 0.
+
+    def reset(self):
+        self.total = 0.
+        self.count = 0.
+
+    def update(self, val: float, size: int = 1):
+        self.total += val * size
+        self.count += size
