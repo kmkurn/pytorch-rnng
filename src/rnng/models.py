@@ -316,10 +316,11 @@ class DiscRNNGrammar(RNNGrammar):
         nonterms = list(self.action2nt.values())
         actions = range(self.num_actions)
 
-        word_indices = Variable(self._new(words).long().view(1, -1))
-        pos_indices = Variable(self._new(pos_tags).long().view(1, -1))
-        nt_indices = Variable(self._new(nonterms).long().view(1, -1))
-        action_indices = Variable(self._new(actions).long().view(1, -1))
+        volatile = not self.training
+        word_indices = Variable(self._new(words).long().view(1, -1), volatile=volatile)
+        pos_indices = Variable(self._new(pos_tags).long().view(1, -1), volatile=volatile)
+        nt_indices = Variable(self._new(nonterms).long().view(1, -1), volatile=volatile)
+        action_indices = Variable(self._new(actions).long().view(1, -1), volatile=volatile)
 
         word_embs = self.word_emb(word_indices).view(-1, self.word_dim)
         pos_embs = self.pos_emb(pos_indices).view(-1, self.pos_dim)
