@@ -166,9 +166,9 @@ class TestDiscRNNGrammar:
 
         assert len(parser.stack_buffer) == 1
         last = parser.stack_buffer[-1]
-        assert isinstance(last.subtree, Tree)
-        assert last.subtree.label() == self.nt2id['S']
-        assert last.is_open_nt
+        assert isinstance(last, Tree)
+        assert last.label() == self.nt2id['S']
+        assert len(last) == 0
         assert parser.input_buffer == prev_input_buffer
         assert len(parser.action_history) == 1
         assert parser.action_history[-1] == self.action2id['NT(S)']
@@ -190,8 +190,7 @@ class TestDiscRNNGrammar:
 
         assert len(parser.stack_buffer) == 3
         last = parser.stack_buffer[-1]
-        assert last.subtree == self.word2id['John']
-        assert not last.is_open_nt
+        assert last == self.word2id['John']
         assert parser.input_buffer == tuple(words[1:])
         assert len(parser.action_history) == 3
         assert parser.action_history[-1] == self.action2id['SHIFT']
@@ -215,11 +214,10 @@ class TestDiscRNNGrammar:
 
         assert len(parser.stack_buffer) == 2
         last = parser.stack_buffer[-1]
-        assert isinstance(last.subtree, Tree)
-        assert last.subtree.label() == self.nt2id['NP']
-        assert len(last.subtree) == 1
-        assert last.subtree[0] == self.word2id['John']
-        assert not last.is_open_nt
+        assert isinstance(last, Tree)
+        assert last.label() == self.nt2id['NP']
+        assert len(last) == 1
+        assert last[0] == self.word2id['John']
         assert parser.input_buffer == prev_input_buffer
         assert len(parser.action_history) == 4
         assert parser.action_history[-1] == self.action2id['REDUCE']
@@ -276,7 +274,7 @@ class TestDiscRNNGrammar:
         parser.do_action(self.action2id['REDUCE'])
 
         assert parser.finished
-        parse_tree = parser.stack_buffer[-1].subtree
+        parse_tree = parser.stack_buffer[-1]
         assert str(parse_tree) == str(exp_parse_tree)
         with pytest.raises(RuntimeError):
             parser.do_action(self.action2id['REDUCE'])

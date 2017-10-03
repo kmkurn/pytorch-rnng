@@ -185,8 +185,8 @@ class DiscRNNGrammar(nn.Module):
         self._action_emb = {}  # type: Dict[ActionId, Variable]
 
     @property
-    def stack_buffer(self) -> Sequence[StackElement]:
-        return tuple(self._stack)
+    def stack_buffer(self) -> Sequence[Union[Tree, WordId]]:
+        return tuple(x.subtree for x in self._stack)
 
     @property
     def input_buffer(self) -> Sequence[WordId]:
