@@ -1,7 +1,9 @@
 from nltk.tree import Tree
 import pytest
 
-from rnng.oracle import ShiftAction, ReduceAction, NTAction, GenAction, DiscOracle, GenOracle
+from rnng.oracle import (ShiftAction, ReduceAction, NTAction, GenAction, DiscOracle,
+                         GenOracle, OracleDataset)
+from rnng.utils import TermStore
 
 
 class TestShiftAction:
@@ -125,3 +127,55 @@ class TestGenOracle:
 
         with pytest.raises(ValueError):
             GenOracle.from_string(s)
+
+
+class TestOracleDataset:
+    bracketed_sents = [
+        '(S (NP (NNP John)) (VP (VBZ loves) (NP (NNP Mary))))',
+        '(S (NP (NNP Mary)) (VP (VBZ hates) (NP (NNP John))))'  # poor John
+    ]
+    words = {'John', 'loves', 'hates', 'Mary'}
+    pos_tags = {'NNP', 'VBZ'}
+    nt_labels = {'S', 'NP', 'VP'}
+    actions = {str(NTAction('S')), str(NTAction('NP')), str(NTAction('VP')),
+               str(ShiftAction()), str(ReduceAction())}
+
+    def test_init(self):
+        oracles = [DiscOracle.from_parsed_sent(Tree.fromstring(s))
+                   for s in self.bracketed_sents]
+
+        dataset = OracleDataset(oracles)
+
+        assert isinstance(dataset.word_store, TermStore)
+        assert set(dataset.word_store) == self.words
+        assert isinstance(dataset.pos_store, TermStore)
+        assert set(dataset.pos_store) == self.pos_tags
+        assert isinstance(dataset.nt_store, TermStore)
+        assert set(dataset.nt_store) == self.nt_labels
+        assert isinstance(dataset.action_store, TermStore)
+        assert set(dataset.action_store) == self.actions
+        assert len(dataset.action2nt) == sum(a.startswith('NT(') for a in self.actions)
+        for label in self.nt_labels:
+            nt_id = dataset.action2nt[dataset.action_store.get_id(str(NTAction(label)))]
+            assert nt_id == dataset.nt_store.get_id(label)
+
+    def test_getitem(self):
+        oracles = [DiscOracle.from_parsed_sent(Tree.fromstring(s))
+                   for s in self.bracketed_sents]
+        dataset = OracleDataset(oracles)
+
+        words, pos_tags, actions = dataset[0]
+        assert [dataset.word_store.get_term(wid) for wid in words] == ['John', 'loves', 'Mary']
+        assert [dataset.pos_store.get_term(pid) for pid in pos_tags] == ['NNP', 'VBZ', 'NNP']
+        assert [dataset.action_store.get_term(aid) for aid in actions] == [
+            str(NTAction('S')), str(NTAction('NP')), str(ShiftAction()), str(ReduceAction()),
+            str(NTAction('VP')), str(ShiftAction()), str(NTAction('NP')), str(ShiftAction()),
+            str(ReduceAction()), str(ReduceAction()), str(ReduceAction())]
+
+        words, pos_tags, actions = dataset[1]
+        assert [dataset.word_store.get_term(wid) for wid in words] == ['Mary', 'hates', 'John']
+        assert [dataset.pos_store.get_term(pid) for pid in pos_tags] == ['NNP', 'VBZ', 'NNP']
+        assert [dataset.action_store.get_term(aid) for aid in actions] == [
+            str(NTAction('S')), str(NTAction('NP')), str(ShiftAction()), str(ReduceAction()),
+            str(NTAction('VP')), str(ShiftAction()), str(NTAction('NP')), str(ShiftAction()),
+            str(ReduceAction()), str(ReduceAction()), str(ReduceAction())]

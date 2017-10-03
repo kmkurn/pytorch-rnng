@@ -1,10 +1,13 @@
 import abc
-from typing import List, Sequence
-from typing import Type  # noqa
+from typing import List, Sequence, Tuple
+from typing import Dict, Type  # noqa
 
 from nltk.tree import Tree
+from torch.utils.data import Dataset
 
-from rnng.typing import Word, POSTag, NTLabel
+from rnng.typing import ActionId, NTLabel, POSId, POSTag, Word, WordId
+from rnng.typing import NTId  # noqa
+from rnng.utils import TermStore
 
 
 class Action:
@@ -262,3 +265,39 @@ class GenOracle(Oracle):
         else:
             raise ValueError(
                 f"'{line}' is not a valid string for any generative parser action")
+
+
+class OracleDataset(Dataset):
+    def __init__(self, oracles: Sequence[Oracle]) -> None:
+        self.oracles = oracles
+        self.word_store = TermStore()
+        self.pos_store = TermStore()
+        self.nt_store = TermStore()
+        self.action_store = TermStore()
+        self.action2nt = {}  # type: Dict[ActionId, NTId]
+
+        self.load()
+
+    def load(self) -> None:
+        for oracle in self.oracles:
+            for word in oracle.words:
+                self.word_store.add(word)
+            for pos in oracle.pos_tags:
+                self.pos_store.add(pos)
+            for action in oracle.actions:
+                a_str = str(action)
+                self.action_store.add(a_str)
+                if isinstance(action, NTAction):
+                    self.nt_store.add(action.label)
+                    aid = self.action_store.get_id(a_str)
+                    self.action2nt[aid] = self.nt_store.get_id(action.label)
+
+    def __getitem__(self, index: int) -> Tuple[List[WordId], List[POSId], List[ActionId]]:
+        oracle = self.oracles[index]
+        word_ids = [self.word_store.get_id(w) for w in oracle.words]
+        pos_ids = [self.pos_store.get_id(p) for p in oracle.pos_tags]
+        action_ids = [self.action_store.get_id(str(a)) for a in oracle.actions]
+        return word_ids, pos_ids, action_ids
+
+    def __len__(self) -> int:
+        return len(self.oracles)
