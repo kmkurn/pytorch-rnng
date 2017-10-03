@@ -243,6 +243,14 @@ class TestDiscRNNGrammar:
         sum_prob = action_logprobs.exp().sum().data[0]
         assert 0.999 <= sum_prob and sum_prob <= 1.001
 
+    def test_forward_when_not_started(self):
+        parser = DiscRNNGrammar(
+            len(self.word2id), len(self.pos2id), len(self.nt2id), len(self.action2id),
+            self.action2id['SHIFT'], self.action2nt)
+
+        with pytest.raises(RuntimeError):
+            parser()
+
     def test_finished(self):
         words = [self.word2id[w] for w in ['John', 'loves', 'Mary']]
         pos_tags = [self.pos2id[p] for p in ['NNP', 'VBZ', 'NNP']]
