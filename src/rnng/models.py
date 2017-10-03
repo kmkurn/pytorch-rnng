@@ -95,7 +95,7 @@ class DiscRNNGrammar(nn.Module):
                  shift_action: ActionId, action2nt: Mapping[ActionId, NTId],
                  word_dim: int = 32, pos_dim: int = 12, nt_dim: int = 60, action_dim: int = 16,
                  input_dim: int = 128, hidden_dim: int = 128, num_layers: int = 2,
-                 dropout: float = .0) -> None:
+                 dropout: float = 0.) -> None:
         if shift_action in action2nt:
             raise ValueError('SHIFT action cannot also be NT(X) action')
 
@@ -181,15 +181,15 @@ class DiscRNNGrammar(nn.Module):
         self._action_emb = {}  # type: Dict[ActionId, Variable]
 
     @property
-    def stack_buffer(self):
+    def stack_buffer(self) -> Sequence[StackElement]:
         return tuple(self._stack)
 
     @property
-    def input_buffer(self):
+    def input_buffer(self) -> Sequence[WordId]:
         return tuple(reversed(self._buffer))
 
     @property
-    def action_history(self):
+    def action_history(self) -> Sequence[ActionId]:
         return tuple(self._history)
 
     @property
