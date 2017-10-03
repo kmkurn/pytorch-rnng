@@ -1,7 +1,8 @@
-from collections import OrderedDict, namedtuple
-from typing import Collection, Mapping, Sequence, Sized, Tuple
+from collections import OrderedDict
+from typing import Collection, Mapping, NamedTuple, Sequence, Sized, Tuple, Union
 from typing import Dict, List  # noqa
 
+from nltk.tree import Tree
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -85,7 +86,10 @@ def log_softmax(inputs: Variable, restrictions=None) -> Variable:
     return F.log_softmax(inputs + addend)
 
 
-StackElement = namedtuple('StackElement', ['emb', 'is_open_nt'])
+class StackElement(NamedTuple):
+    subtree: Union[WordId, Tree]
+    emb: Variable
+    is_open_nt: bool
 
 
 class DiscRNNGrammar(nn.Module):
@@ -232,12 +236,13 @@ class DiscRNNGrammar(nn.Module):
             word = self._buffer.pop()
             self.buffer_lstm.pop()
             assert word in self._word_emb
-            self._stack.append(StackElement(self._word_emb[word], False))
+            self._stack.append(StackElement(word, self._word_emb[word], False))
             self.stack_lstm.push(self._word_emb[word])
         elif action in self.action2nt:  # NT(X)
             nonterm = self.action2nt[action]
             try:
-                self._stack.append(StackElement(self._nt_emb[nonterm], True))
+                self._stack.append(
+                    StackElement(Tree(nonterm, []), self._nt_emb[nonterm], True))
                 self.stack_lstm.push(self._nt_emb[nonterm])
             except KeyError:
                 raise KeyError('cannot find embedding for the nonterminal; '
@@ -245,14 +250,22 @@ class DiscRNNGrammar(nn.Module):
             else:
                 self._num_open_nt += 1
         else:  # REDUCE
+            children = []
             children_emb = []
             while len(self._stack) > 0 and not self._stack[-1].is_open_nt:
-                children_emb.append(self._stack.pop().emb)
-            assert len(children_emb) > 0
+                child = self._stack.pop()
+                children.append(child.subtree)
+                children_emb.append(child.emb)
+            assert len(children) > 0
+            assert len(children_emb) == len(children)
             assert len(self._stack) > 0
-            open_nt_emb = self._stack.pop().emb
-            composed_emb = self._compose(open_nt_emb, list(reversed(children_emb)))
-            self._stack.append(StackElement(composed_emb, False))
+
+            open_nt = self._stack.pop()
+            subtree = open_nt.subtree
+            assert isinstance(subtree, Tree)
+            subtree.extend(reversed(children))
+            composed_emb = self._compose(open_nt.emb, list(reversed(children_emb)))
+            self._stack.append(StackElement(subtree, composed_emb, False))
             self._num_open_nt -= 1
 
         self._history.append(action)

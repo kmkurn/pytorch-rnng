@@ -1,3 +1,4 @@
+from nltk.tree import Tree
 import pytest
 import torch
 from torch.autograd import Variable
@@ -164,7 +165,10 @@ class TestDiscRNNGrammar:
         parser.do_action(self.action2id['NT(S)'])
 
         assert len(parser.stack_buffer) == 1
-        assert parser.stack_buffer[-1].is_open_nt
+        last = parser.stack_buffer[-1]
+        assert isinstance(last.subtree, Tree)
+        assert last.subtree.label() == self.nt2id['S']
+        assert last.is_open_nt
         assert parser.input_buffer == prev_input_buffer
         assert len(parser.action_history) == 1
         assert parser.action_history[-1] == self.action2id['NT(S)']
@@ -185,7 +189,9 @@ class TestDiscRNNGrammar:
         parser.do_action(self.action2id['SHIFT'])
 
         assert len(parser.stack_buffer) == 3
-        assert not parser.stack_buffer[-1].is_open_nt
+        last = parser.stack_buffer[-1]
+        assert last.subtree == self.word2id['John']
+        assert not last.is_open_nt
         assert parser.input_buffer == tuple(words[1:])
         assert len(parser.action_history) == 3
         assert parser.action_history[-1] == self.action2id['SHIFT']
@@ -208,7 +214,12 @@ class TestDiscRNNGrammar:
         parser.do_action(self.action2id['REDUCE'])
 
         assert len(parser.stack_buffer) == 2
-        assert not parser.stack_buffer[-1].is_open_nt
+        last = parser.stack_buffer[-1]
+        assert isinstance(last.subtree, Tree)
+        assert last.subtree.label() == self.nt2id['NP']
+        assert len(last.subtree) == 1
+        assert last.subtree[0] == self.word2id['John']
+        assert not last.is_open_nt
         assert parser.input_buffer == prev_input_buffer
         assert len(parser.action_history) == 4
         assert parser.action_history[-1] == self.action2id['REDUCE']
@@ -240,6 +251,16 @@ class TestDiscRNNGrammar:
         parser = DiscRNNGrammar(
             len(self.word2id), len(self.pos2id), len(self.nt2id), len(self.action2id),
             self.action2id['SHIFT'], self.action2nt)
+        exp_parse_tree = Tree(self.nt2id['S'], [
+            Tree(self.nt2id['NP'], [
+                self.word2id['John']]),
+            Tree(self.nt2id['VP'], [
+                self.word2id['loves'],
+                Tree(self.nt2id['NP'], [
+                    self.word2id['Mary']
+                ])
+            ])
+        ])
 
         parser.start(zip(words, pos_tags))
         parser.do_action(self.action2id['NT(S)'])
@@ -255,3 +276,5 @@ class TestDiscRNNGrammar:
         parser.do_action(self.action2id['REDUCE'])
 
         assert parser.finished
+        parse_tree = parser.stack_buffer[-1].subtree
+        assert str(parse_tree) == str(exp_parse_tree)
