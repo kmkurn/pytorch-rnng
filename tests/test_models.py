@@ -278,3 +278,5 @@ class TestDiscRNNGrammar:
         assert parser.finished
         parse_tree = parser.stack_buffer[-1].subtree
         assert str(parse_tree) == str(exp_parse_tree)
+        with pytest.raises(RuntimeError):
+            parser.do_action(self.action2id['REDUCE'])
