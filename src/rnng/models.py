@@ -202,11 +202,6 @@ class DiscRNNGrammar(RNNGrammar):
         self.buffer_guard = nn.Parameter(torch.Tensor(input_dim))
         self.history_guard = nn.Parameter(torch.Tensor(input_dim))
 
-        # Feed guards as inputs
-        self.stack_lstm.push(self.stack_guard)
-        self.buffer_lstm.push(self.buffer_guard)
-        self.history_lstm.push(self.history_guard)
-
         # Final embeddings
         self._word_emb = {}  # type: Dict[WordId, Variable]
         self._nt_emb = {}  # type: Dict[NTId, Variable]
@@ -239,12 +234,17 @@ class DiscRNNGrammar(RNNGrammar):
         self._buffer = []
         self._history = []
 
-        while len(self.stack_lstm) > 1:
+        while len(self.stack_lstm) > 0:
             self.stack_lstm.pop()
-        while len(self.buffer_lstm) > 1:
+        while len(self.buffer_lstm) > 0:
             self.buffer_lstm.pop()
-        while len(self.history_lstm) > 1:
+        while len(self.history_lstm) > 0:
             self.history_lstm.pop()
+
+        # Feed guards as inputs
+        self.stack_lstm.push(self.stack_guard)
+        self.buffer_lstm.push(self.buffer_guard)
+        self.history_lstm.push(self.history_guard)
 
         words, pos_tags = tuple(zip(*tagged_words))
         self._prepare_embeddings(words, pos_tags)
