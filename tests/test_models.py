@@ -347,6 +347,25 @@ class TestDiscRNNGrammar:
         with pytest.raises(IllegalActionError):
             parser.do_action(self.action2id['NT(NP)'])
 
+    def test_do_illegal_shift_action(self):
+        words = [self.word2id[w] for w in ['John']]
+        pos_tags = [self.pos2id[p] for p in ['NNP']]
+        parser = DiscRNNGrammar(
+            len(self.word2id), len(self.pos2id), len(self.nt2id), len(self.action2id),
+            self.action2id['SHIFT'], self.action2nt)
+
+        # No open nonterminal
+        parser.start(list(zip(words, pos_tags)))
+        with pytest.raises(IllegalActionError):
+            parser.do_action(self.action2id['SHIFT'])
+
+        # Buffer is empty
+        parser.start(list(zip(words, pos_tags)))
+        parser.do_action(self.action2id['NT(S)'])
+        parser.do_action(self.action2id['SHIFT'])
+        with pytest.raises(IllegalActionError):
+            parser.do_action(self.action2id['SHIFT'])
+
     def test_finished(self):
         words = [self.word2id[w] for w in ['John', 'loves', 'Mary']]
         pos_tags = [self.pos2id[p] for p in ['NNP', 'VBZ', 'NNP']]
