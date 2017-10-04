@@ -279,21 +279,18 @@ class DiscRNNGrammar(RNNGrammar):
                 self._num_open_nt += 1
         else:  # REDUCE
             children = []
-            children_emb = []
             while len(self._stack) > 0 and not self._stack[-1].is_open_nt:
-                child = self._stack.pop()
-                children.append(child.subtree)
-                children_emb.append(child.emb)
+                children.append(self._stack.pop()[:-1])
             assert len(children) > 0
-            assert len(children_emb) == len(children)
             assert len(self._stack) > 0
 
+            children.reverse()
+            child_subtrees, child_embs = zip(*children)
             open_nt = self._stack.pop()
-            subtree = open_nt.subtree
-            assert isinstance(subtree, Tree)
-            subtree.extend(reversed(children))
-            composed_emb = self._compose(open_nt.emb, list(reversed(children_emb)))
-            self._stack.append(StackElement(subtree, composed_emb, False))
+            assert isinstance(open_nt.subtree, Tree)
+            open_nt.subtree.extend(child_subtrees)
+            composed_emb = self._compose(open_nt.emb, child_embs)
+            self._stack.append(StackElement(open_nt.subtree, composed_emb, False))
             self._num_open_nt -= 1
 
         self._history.append(action)
@@ -342,16 +339,17 @@ class DiscRNNGrammar(RNNGrammar):
         self._nt_emb = dict(zip(nonterms, final_nt_embs))
         self._action_emb = dict(zip(actions, final_action_embs))
 
-    def _compose(self, open_nt_emb: Variable, children_emb: Sequence[Variable]) -> Variable:
+    def _compose(self, open_nt_emb: Variable, children_embs: Sequence[Variable]) -> Variable:
         assert open_nt_emb.dim() == 1
-        assert all(x.dim() == 1 for x in children_emb)
+        assert all(x.dim() == 1 for x in children_embs)
         assert open_nt_emb.size(0) == self.input_dim
-        assert all(x.size(0) == self.input_dim for x in children_emb)
+        assert all(x.size(0) == self.input_dim for x in children_embs)
 
         fwd_input = [open_nt_emb]
-        fwd_input.extend(children_emb)
         bwd_input = [open_nt_emb]
-        bwd_input.extend(reversed(children_emb))
+        for i in range(len(children_embs)):
+            fwd_input.append(children_embs[i])
+            bwd_input.append(children_embs[-i - 1])
 
         fwd_input = torch.cat(fwd_input).view(-1, 1, self.input_dim)
         bwd_input = torch.cat(bwd_input).view(-1, 1, self.input_dim)
