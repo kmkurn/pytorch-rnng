@@ -287,10 +287,7 @@ class DiscRNNGrammar(RNNGrammar):
         if action < 0 or action >= self.num_actions:
             raise ValueError('action ID is out of range')
 
-        legal, message = self._is_legal(action)
-        if not legal:
-            raise IllegalActionError(message)
-
+        self._verify_legal(action)
         if action == self.shift_action:
             self._shift()
         elif action in self.action2nt:
@@ -403,14 +400,19 @@ class DiscRNNGrammar(RNNGrammar):
         return self.fwdbwd2composed(torch.cat([fwd_emb, bwd_emb]).view(1, -1)).view(-1)
 
     def _get_illegal_actions(self):
-        illegal_actions = [action for action in range(self.num_actions)
-                           if not self._is_legal(action)[0]]
+        illegal_actions = []
+        for action in range(self.num_actions):
+            try:
+                self._verify_legal(action)
+            except IllegalActionError:
+                illegal_actions.append(action)
         return self._new(illegal_actions).long()
 
-    def _is_legal(self, action: ActionId) -> Tuple[bool, str]:
+    def _verify_legal(self, action: ActionId) -> None:
         assert action >= 0 and action < self.num_actions
         if self.finished:
-            return False, 'parsing algorithm already finished, cannot do more action'
+            raise IllegalActionError(
+                'parsing algorithm already finished, cannot do more action')
 
         nt_actions = self.action2nt.keys()
         assert all(a >= 0 and a < self.num_actions for a in nt_actions)
@@ -418,26 +420,22 @@ class DiscRNNGrammar(RNNGrammar):
         assert n >= 0
         if action in nt_actions:  # NT(X)
             if len(self._buffer) == 0:
-                return False, 'cannot do NT(X) when input buffer is empty'
-            elif n >= self.MAX_OPEN_NT:
-                return False, 'max number of open nonterminals is reached'
-            else:
-                return True, ''
+                raise IllegalActionError('cannot do NT(X) when input buffer is empty')
+            if n >= self.MAX_OPEN_NT:
+                raise IllegalActionError('max number of open nonterminals is reached')
         elif action == self.shift_action:  # SHIFT
             if len(self._buffer) == 0:
-                return False, 'cannot SHIFT when input buffer is empty'
-            elif n == 0:
-                return False, 'cannot SHIFT when no open nonterminal exists'
-            else:
-                return True, ''
+                raise IllegalActionError('cannot SHIFT when input buffer is empty')
+            if n == 0:
+                raise IllegalActionError('cannot SHIFT when no open nonterminal exists')
         else:  # REDUCE
             last_is_nt = len(self._history) > 0 and self._history[-1] in nt_actions
             if last_is_nt:
-                return False, 'cannot REDUCE when top of stack is an open nonterminal'
-            elif n < 2 and len(self._buffer) > 0:
-                return False, 'cannot REDUCE because there are words not SHIFT-ed yet'
-            else:
-                return True, ''
+                raise IllegalActionError(
+                    'cannot REDUCE when top of stack is an open nonterminal')
+            if n < 2 and len(self._buffer) > 0:
+                raise IllegalActionError(
+                    'cannot REDUCE because there are words not SHIFT-ed yet')
 
     def reset_parameters(self) -> None:
         # Stack LSTMs
