@@ -224,6 +224,12 @@ class TestDiscRNNGrammar:
         assert parser.num_open_nt == prev_num_open_nt - 1
         assert not parser.finished
 
+    def test_init_with_invalid_shift_action_id(self):
+        with pytest.raises(ValueError):
+            DiscRNNGrammar(
+                len(self.word2id), len(self.pos2id), len(self.nt2id), len(self.action2id),
+                100, self.action2nt)
+
     def test_forward(self):
         words = [self.word2id[w] for w in ['John', 'loves', 'Mary']]
         pos_tags = [self.pos2id[p] for p in ['NNP', 'VBZ', 'NNP']]

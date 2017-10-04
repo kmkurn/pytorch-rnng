@@ -128,6 +128,8 @@ class DiscRNNGrammar(RNNGrammar):
                  word_dim: int = 32, pos_dim: int = 12, nt_dim: int = 60, action_dim: int = 16,
                  input_dim: int = 128, hidden_dim: int = 128, num_layers: int = 2,
                  dropout: float = 0.) -> None:
+        if shift_action < 0 or shift_action >= num_actions:
+            raise ValueError('SHIFT action ID is out of range')
         if shift_action in action2nt:
             raise ValueError('SHIFT action cannot also be NT(X) action')
 
