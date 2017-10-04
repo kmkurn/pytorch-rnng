@@ -145,7 +145,7 @@ class TestDiscRNNGrammar:
             len(self.word2id), len(self.pos2id), len(self.nt2id), len(self.action2id),
             self.action2id['SHIFT'], self.action2nt)
 
-        parser.start(zip(words, pos_tags))
+        parser.start(list(zip(words, pos_tags)))
 
         assert len(parser.stack_buffer) == 0
         assert parser.input_buffer == words
@@ -159,7 +159,7 @@ class TestDiscRNNGrammar:
         parser = DiscRNNGrammar(
             len(self.word2id), len(self.pos2id), len(self.nt2id), len(self.action2id),
             self.action2id['SHIFT'], self.action2nt)
-        parser.start(zip(words, pos_tags))
+        parser.start(list(zip(words, pos_tags)))
         prev_input_buffer = parser.input_buffer
 
         parser.do_action(self.action2id['NT(S)'])
@@ -181,7 +181,7 @@ class TestDiscRNNGrammar:
         parser = DiscRNNGrammar(
             len(self.word2id), len(self.pos2id), len(self.nt2id), len(self.action2id),
             self.action2id['SHIFT'], self.action2nt)
-        parser.start(zip(words, pos_tags))
+        parser.start(list(zip(words, pos_tags)))
         parser.do_action(self.action2id['NT(S)'])
         parser.do_action(self.action2id['NT(NP)'])
         prev_num_open_nt = parser.num_open_nt
@@ -203,7 +203,7 @@ class TestDiscRNNGrammar:
         parser = DiscRNNGrammar(
             len(self.word2id), len(self.pos2id), len(self.nt2id), len(self.action2id),
             self.action2id['SHIFT'], self.action2nt)
-        parser.start(zip(words, pos_tags))
+        parser.start(list(zip(words, pos_tags)))
         parser.do_action(self.action2id['NT(S)'])
         parser.do_action(self.action2id['NT(NP)'])
         parser.do_action(self.action2id['SHIFT'])
@@ -230,7 +230,7 @@ class TestDiscRNNGrammar:
         parser = DiscRNNGrammar(
             len(self.word2id), len(self.pos2id), len(self.nt2id), len(self.action2id),
             self.action2id['SHIFT'], self.action2nt)
-        parser.start(zip(words, pos_tags))
+        parser.start(list(zip(words, pos_tags)))
         parser.do_action(self.action2id['NT(S)'])
         parser.do_action(self.action2id['NT(NP)'])
         parser.do_action(self.action2id['SHIFT'])
@@ -265,10 +265,18 @@ class TestDiscRNNGrammar:
         parser = DiscRNNGrammar(
             len(self.word2id), len(self.pos2id), len(self.nt2id), len(self.action2id),
             self.action2id['SHIFT'], self.action2nt)
-        parser.start(zip(words, pos_tags))
+        parser.start(list(zip(words, pos_tags)))
 
         with pytest.raises(ValueError):
             parser.do_action(100)
+
+    def test_start_with_empty_tagged_words(self):
+        parser = DiscRNNGrammar(
+            len(self.word2id), len(self.pos2id), len(self.nt2id), len(self.action2id),
+            self.action2id['SHIFT'], self.action2nt)
+
+        with pytest.raises(ValueError):
+            parser.start([])
 
     def test_finished(self):
         words = [self.word2id[w] for w in ['John', 'loves', 'Mary']]
@@ -287,7 +295,7 @@ class TestDiscRNNGrammar:
             ])
         ])
 
-        parser.start(zip(words, pos_tags))
+        parser.start(list(zip(words, pos_tags)))
         parser.do_action(self.action2id['NT(S)'])
         parser.do_action(self.action2id['NT(NP)'])
         parser.do_action(self.action2id['SHIFT'])

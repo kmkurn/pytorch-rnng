@@ -34,7 +34,7 @@ def test_greedy_decode(mocker):
     parser = DiscRNNGrammar(
         len(word2id), len(pos2id), len(nt2id), len(action2id),
         action2id['SHIFT'], action2nt)
-    parser.start(zip(words, pos_tags))
+    parser.start(list(zip(words, pos_tags)))
     mocker.patch.object(parser, 'forward', side_effect=retvals)
 
     result = greedy_decode(parser)
