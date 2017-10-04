@@ -192,10 +192,10 @@ class DiscRNNGrammar(RNNGrammar):
         self.summary2actions = nn.Linear(hidden_dim, num_actions)
 
         # Embeddings
-        self.word_emb = nn.Embedding(num_words, word_dim)
-        self.pos_emb = nn.Embedding(num_pos, pos_dim)
-        self.nt_emb = nn.Embedding(num_nt, nt_dim)
-        self.action_emb = nn.Embedding(num_actions, action_dim)
+        self.word_embs = nn.Embedding(num_words, word_dim)
+        self.pos_embs = nn.Embedding(num_pos, pos_dim)
+        self.nt_embs = nn.Embedding(num_nt, nt_dim)
+        self.action_embs = nn.Embedding(num_actions, action_dim)
 
         # Guard parameters for stack, buffer, and action history
         self.stack_guard = nn.Parameter(torch.Tensor(input_dim))
@@ -326,10 +326,10 @@ class DiscRNNGrammar(RNNGrammar):
         nt_indices = Variable(self._new(nonterms).long().view(1, -1), volatile=volatile)
         action_indices = Variable(self._new(actions).long().view(1, -1), volatile=volatile)
 
-        word_embs = self.word_emb(word_indices).view(-1, self.word_dim)
-        pos_embs = self.pos_emb(pos_indices).view(-1, self.pos_dim)
-        nt_embs = self.nt_emb(nt_indices).view(-1, self.nt_dim)
-        action_embs = self.action_emb(action_indices).view(-1, self.action_dim)
+        word_embs = self.word_embs(word_indices).view(-1, self.word_dim)
+        pos_embs = self.pos_embs(pos_indices).view(-1, self.pos_dim)
+        nt_embs = self.nt_embs(nt_indices).view(-1, self.nt_dim)
+        action_embs = self.action_embs(action_indices).view(-1, self.action_dim)
 
         final_word_embs = self.word2lstm(torch.cat([word_embs, pos_embs], dim=1))
         final_nt_embs = self.nt2lstm(nt_embs)
