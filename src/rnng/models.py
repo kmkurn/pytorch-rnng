@@ -244,6 +244,11 @@ class DiscRNNGrammar(RNNGrammar):
     def start(self, tagged_words: Sequence[Tuple[WordId, POSId]]) -> None:
         if len(tagged_words) == 0:
             raise ValueError('parser cannot be started with empty sequence of words')
+        for word, pos in tagged_words:
+            if word < 0 or word >= self.num_words:
+                raise ValueError('Word ID is out of range')
+            if pos < 0 or pos >= self.num_pos:
+                raise ValueError('POS tag ID is out of range')
 
         self._stack = []
         self._buffer = []

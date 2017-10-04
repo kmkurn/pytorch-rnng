@@ -279,6 +279,25 @@ class TestDiscRNNGrammar:
         sum_prob = action_logprobs.exp().sum().data[0]
         assert 0.999 <= sum_prob and sum_prob <= 1.001
 
+    def test_start_with_empty_tagged_words(self):
+        parser = DiscRNNGrammar(
+            len(self.word2id), len(self.pos2id), len(self.nt2id), len(self.action2id),
+            self.action2id['SHIFT'], self.action2nt)
+
+        with pytest.raises(ValueError):
+            parser.start([])
+
+    def test_start_with_invalid_word_or_pos(self):
+        parser = DiscRNNGrammar(
+            len(self.word2id), len(self.pos2id), len(self.nt2id), len(self.action2id),
+            self.action2id['SHIFT'], self.action2nt)
+
+        with pytest.raises(ValueError):
+            parser.start([(len(self.word2id), self.pos2id['NNP'])])
+
+        with pytest.raises(ValueError):
+            parser.start([(self.word2id['John'], len(self.pos2id))])
+
     def test_forward_when_not_started(self):
         parser = DiscRNNGrammar(
             len(self.word2id), len(self.pos2id), len(self.nt2id), len(self.action2id),
@@ -295,7 +314,7 @@ class TestDiscRNNGrammar:
         with pytest.raises(RuntimeError):
             parser.do_action(self.action2id['SHIFT'])
 
-    def test_invalid_action_id(self):
+    def test_do_invalid_action(self):
         words = [self.word2id[w] for w in ['John', 'loves', 'Mary']]
         pos_tags = [self.pos2id[p] for p in ['NNP', 'VBZ', 'NNP']]
         parser = DiscRNNGrammar(
@@ -305,14 +324,6 @@ class TestDiscRNNGrammar:
 
         with pytest.raises(ValueError):
             parser.do_action(len(self.action2id))
-
-    def test_start_with_empty_tagged_words(self):
-        parser = DiscRNNGrammar(
-            len(self.word2id), len(self.pos2id), len(self.nt2id), len(self.action2id),
-            self.action2id['SHIFT'], self.action2nt)
-
-        with pytest.raises(ValueError):
-            parser.start([])
 
     def test_finished(self):
         words = [self.word2id[w] for w in ['John', 'loves', 'Mary']]
