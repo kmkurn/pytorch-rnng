@@ -180,7 +180,7 @@ class DiscRNNGrammar(RNNGrammar):
             ('linear', nn.Linear(action_dim, input_dim)),
             ('relu', nn.ReLU())
         ]))
-        self.compose2final = nn.Sequential(OrderedDict([
+        self.fwdbwd2composed = nn.Sequential(OrderedDict([
             ('linear', nn.Linear(2 * input_dim, input_dim)),
             ('relu', nn.ReLU())
         ]))
@@ -357,7 +357,7 @@ class DiscRNNGrammar(RNNGrammar):
         bwd_output, _ = self.compose_bwd_lstm(bwd_input, self._init_compose_states())
         fwd_emb = F.dropout(fwd_output[-1, 0], p=self.dropout, training=self.training)
         bwd_emb = F.dropout(bwd_output[-1, 0], p=self.dropout, training=self.training)
-        return self.compose2final(torch.cat([fwd_emb, bwd_emb]).view(1, -1)).view(-1)
+        return self.fwdbwd2composed(torch.cat([fwd_emb, bwd_emb]).view(1, -1)).view(-1)
 
     def _get_illegal_actions(self):
         illegal_actions = [action for action in range(self.num_actions)
@@ -415,13 +415,14 @@ class DiscRNNGrammar(RNNGrammar):
                     init.constant(pval, 0.)
 
         # Transformations
+        gain = init.calculate_gain('relu')
         for name in ['word', 'nt', 'action']:
             layer = getattr(self, f'{name}2lstm')
-            init.xavier_uniform(layer.linear.weight, gain=init.calculate_gain('relu'))
+            init.xavier_uniform(layer.linear.weight, gain=gain)
             init.constant(layer.linear.bias, 1.)
-        init.xavier_uniform(self.compose2final.linear.weight, gain=init.calculate_gain('relu'))
-        init.constant(self.compose2final.linear.bias, 1.)
-        init.xavier_uniform(self.lstms2summary.linear.weight, gain=init.calculate_gain('relu'))
+        init.xavier_uniform(self.fwdbwd2composed.linear.weight, gain=gain)
+        init.constant(self.fwdbwd2composed.linear.bias, 1.)
+        init.xavier_uniform(self.lstms2summary.linear.weight, gain=gain)
         init.constant(self.lstms2summary.linear.bias, 1.)
         init.xavier_uniform(self.summary2actions.weight)
         init.constant(self.summary2actions.bias, 0.)
