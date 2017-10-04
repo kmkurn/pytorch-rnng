@@ -258,41 +258,12 @@ class DiscRNNGrammar(RNNGrammar):
         if not legal:
             raise RuntimeError(message)
 
-        if action == self.shift_action:  # SHIFT
-            assert len(self._buffer) > 0
-            assert len(self.buffer_lstm) > 0
-            word = self._buffer.pop()
-            self.buffer_lstm.pop()
-            assert word in self._word_emb
-            self._stack.append(StackElement(word, self._word_emb[word], False))
-            self.stack_lstm.push(self._word_emb[word])
-        elif action in self.action2nt:  # NT(X)
-            nonterm = self.action2nt[action]
-            try:
-                self._stack.append(
-                    StackElement(Tree(nonterm, []), self._nt_emb[nonterm], True))
-                self.stack_lstm.push(self._nt_emb[nonterm])
-            except KeyError:
-                raise KeyError('cannot find embedding for the nonterminal; '
-                               'perhaps you forgot to call .start() beforehand?')
-            else:
-                self._num_open_nt += 1
-        else:  # REDUCE
-            children = []
-            while len(self._stack) > 0 and not self._stack[-1].is_open_nt:
-                children.append(self._stack.pop()[:-1])
-            assert len(children) > 0
-            assert len(self._stack) > 0
-
-            children.reverse()
-            child_subtrees, child_embs = zip(*children)
-            open_nt = self._stack.pop()
-            assert isinstance(open_nt.subtree, Tree)
-            open_nt.subtree.extend(child_subtrees)
-            composed_emb = self._compose(open_nt.emb, child_embs)
-            self._stack.append(StackElement(open_nt.subtree, composed_emb, False))
-            self._num_open_nt -= 1
-
+        if action == self.shift_action:
+            self._shift()
+        elif action in self.action2nt:
+            self._push_new_open_nt(self.action2nt[action])
+        else:
+            self._reduce()
         self._history.append(action)
         try:
             self.history_lstm.push(self._action_emb[action])
@@ -338,6 +309,42 @@ class DiscRNNGrammar(RNNGrammar):
         self._word_emb = dict(zip(words, final_word_embs))
         self._nt_emb = dict(zip(nonterms, final_nt_embs))
         self._action_emb = dict(zip(actions, final_action_embs))
+
+    def _shift(self) -> None:
+        assert len(self._buffer) > 0
+        assert len(self.buffer_lstm) > 0
+        word = self._buffer.pop()
+        self.buffer_lstm.pop()
+        assert word in self._word_emb
+        self._stack.append(StackElement(word, self._word_emb[word], False))
+        self.stack_lstm.push(self._word_emb[word])
+
+    def _reduce(self) -> None:
+        children = []
+        while len(self._stack) > 0 and not self._stack[-1].is_open_nt:
+            children.append(self._stack.pop()[:-1])
+        assert len(children) > 0
+        assert len(self._stack) > 0
+
+        children.reverse()
+        child_subtrees, child_embs = zip(*children)
+        open_nt = self._stack.pop()
+        assert isinstance(open_nt.subtree, Tree)
+        open_nt.subtree.extend(child_subtrees)
+        composed_emb = self._compose(open_nt.emb, child_embs)
+        self._stack.append(StackElement(open_nt.subtree, composed_emb, False))
+        self._num_open_nt -= 1
+
+    def _push_new_open_nt(self, nonterm: NTId) -> None:
+        try:
+            self._stack.append(
+                StackElement(Tree(nonterm, []), self._nt_emb[nonterm], True))
+            self.stack_lstm.push(self._nt_emb[nonterm])
+        except KeyError:
+            raise KeyError('cannot find embedding for the nonterminal; '
+                           'perhaps you forgot to call .start() beforehand?')
+        else:
+            self._num_open_nt += 1
 
     def _compose(self, open_nt_emb: Variable, children_embs: Sequence[Variable]) -> Variable:
         assert open_nt_emb.dim() == 1
