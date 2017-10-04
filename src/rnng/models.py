@@ -286,20 +286,22 @@ class DiscRNNGrammar(RNNGrammar):
             raise RuntimeError('parser is not started yet, please call `start` method first')
         if action < 0 or action >= self.num_actions:
             raise ValueError('action ID is out of range')
+        if self.finished:
+            raise IllegalActionError(
+                'parsing algorithm already finished, cannot do more action')
 
-        self._verify_legal(action)
         if action == self.shift_action:
+            self._verify_shift()
             self._shift()
         elif action in self.action2nt:
+            self._verify_nt()
             self._push_new_open_nt(self.action2nt[action])
         else:
+            self._verify_reduce()
             self._reduce()
+        assert action in self._action_emb
         self._history.append(action)
-        try:
-            self.history_lstm.push(self._action_emb[action])
-        except KeyError:
-            raise KeyError('cannot find embedding for the action; '
-                           'perhaps you forgot to call .start() beforehand?')
+        self.history_lstm.push(self._action_emb[action])
 
     def forward(self):
         if not self._started:
@@ -367,17 +369,14 @@ class DiscRNNGrammar(RNNGrammar):
         composed_emb = self._compose(open_nt.emb, child_embs)
         self._stack.append(StackElement(open_nt.subtree, composed_emb, False))
         self._num_open_nt -= 1
+        assert self._num_open_nt >= 0
 
     def _push_new_open_nt(self, nonterm: NTId) -> None:
-        try:
-            self._stack.append(
-                StackElement(Tree(nonterm, []), self._nt_emb[nonterm], True))
-            self.stack_lstm.push(self._nt_emb[nonterm])
-        except KeyError:
-            raise KeyError('cannot find embedding for the nonterminal; '
-                           'perhaps you forgot to call .start() beforehand?')
-        else:
-            self._num_open_nt += 1
+        assert nonterm in self._nt_emb
+        self._stack.append(
+            StackElement(Tree(nonterm, []), self._nt_emb[nonterm], True))
+        self.stack_lstm.push(self._nt_emb[nonterm])
+        self._num_open_nt += 1
 
     def _compose(self, open_nt_emb: Variable, children_embs: Sequence[Variable]) -> Variable:
         assert open_nt_emb.dim() == 1
@@ -400,42 +399,48 @@ class DiscRNNGrammar(RNNGrammar):
         return self.fwdbwd2composed(torch.cat([fwd_emb, bwd_emb]).view(1, -1)).view(-1)
 
     def _get_illegal_actions(self):
-        illegal_actions = []
-        for action in range(self.num_actions):
-            try:
-                self._verify_legal(action)
-            except IllegalActionError:
-                illegal_actions.append(action)
+        illegal_actions = [action for action in range(self.num_actions)
+                           if self._is_legal(action)]
         return self._new(illegal_actions).long()
 
-    def _verify_legal(self, action: ActionId) -> None:
+    def _is_legal(self, action: ActionId) -> bool:
         assert action >= 0 and action < self.num_actions
-        if self.finished:
-            raise IllegalActionError(
-                'parsing algorithm already finished, cannot do more action')
+        try:
+            if action in self.action2nt:
+                self._verify_nt()
+            elif action == self.shift_action:
+                self._verify_shift()
+            else:
+                self._verify_reduce()
+        except IllegalActionError:
+            return False
+        else:
+            return True
 
-        nt_actions = self.action2nt.keys()
-        assert all(a >= 0 and a < self.num_actions for a in nt_actions)
-        n = self.num_open_nt
-        assert n >= 0
-        if action in nt_actions:  # NT(X)
-            if len(self._buffer) == 0:
-                raise IllegalActionError('cannot do NT(X) when input buffer is empty')
-            if n >= self.MAX_OPEN_NT:
-                raise IllegalActionError('max number of open nonterminals is reached')
-        elif action == self.shift_action:  # SHIFT
-            if len(self._buffer) == 0:
-                raise IllegalActionError('cannot SHIFT when input buffer is empty')
-            if n == 0:
-                raise IllegalActionError('cannot SHIFT when no open nonterminal exists')
-        else:  # REDUCE
-            last_is_nt = len(self._history) > 0 and self._history[-1] in nt_actions
-            if last_is_nt:
-                raise IllegalActionError(
-                    'cannot REDUCE when top of stack is an open nonterminal')
-            if n < 2 and len(self._buffer) > 0:
-                raise IllegalActionError(
-                    'cannot REDUCE because there are words not SHIFT-ed yet')
+    def _verify_nt(self) -> None:
+        assert self.num_open_nt >= 0
+        if len(self._buffer) == 0:
+            raise IllegalActionError('cannot do NT(X) when input buffer is empty')
+        if self.num_open_nt >= self.MAX_OPEN_NT:
+            raise IllegalActionError('max number of open nonterminals is reached')
+
+    def _verify_shift(self) -> None:
+        assert self.num_open_nt >= 0
+        if len(self._buffer) == 0:
+            raise IllegalActionError('cannot SHIFT when input buffer is empty')
+        if self.num_open_nt == 0:
+            raise IllegalActionError('cannot SHIFT when no open nonterminal exists')
+
+    def _verify_reduce(self) -> None:
+        assert all(a >= 0 and a < self.num_actions for a in self.action2nt)
+        assert self.num_open_nt >= 0
+        last_is_nt = len(self._history) > 0 and self._history[-1] in self.action2nt
+        if last_is_nt:
+            raise IllegalActionError(
+                'cannot REDUCE when top of stack is an open nonterminal')
+        if self.num_open_nt < 2 and len(self._buffer) > 0:
+            raise IllegalActionError(
+                'cannot REDUCE because there are words not SHIFT-ed yet')
 
     def reset_parameters(self) -> None:
         # Stack LSTMs
