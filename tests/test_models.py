@@ -228,7 +228,7 @@ class TestDiscRNNGrammar:
         with pytest.raises(ValueError):
             DiscRNNGrammar(
                 len(self.word2id), len(self.pos2id), len(self.nt2id), len(self.action2id),
-                100, self.action2nt)
+                len(self.action2id), self.action2nt)
 
     def test_init_with_invalid_action2nt_mapping(self):
         # Action ID out of range
@@ -304,7 +304,7 @@ class TestDiscRNNGrammar:
         parser.start(list(zip(words, pos_tags)))
 
         with pytest.raises(ValueError):
-            parser.do_action(100)
+            parser.do_action(len(self.action2id))
 
     def test_start_with_empty_tagged_words(self):
         parser = DiscRNNGrammar(
