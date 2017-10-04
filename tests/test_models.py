@@ -230,6 +230,36 @@ class TestDiscRNNGrammar:
                 len(self.word2id), len(self.pos2id), len(self.nt2id), len(self.action2id),
                 100, self.action2nt)
 
+    def test_init_with_invalid_action2nt_mapping(self):
+        # Action ID out of range
+        action2nt = {len(self.action2id): self.nt2id['S']}
+        with pytest.raises(ValueError):
+            DiscRNNGrammar(
+                len(self.word2id), len(self.pos2id), len(self.nt2id), len(self.action2id),
+                self.action2id['SHIFT'], action2nt)
+
+        # Nonterminal ID out of range
+        action2nt = {self.action2id['NT(S)']: len(self.nt2id)}
+        with pytest.raises(ValueError):
+            DiscRNNGrammar(
+                len(self.word2id), len(self.pos2id), len(self.nt2id), len(self.action2id),
+                self.action2id['SHIFT'], action2nt)
+
+        # SHIFT action ID is also an NT(X) action ID
+        action2nt = {self.action2id['SHIFT']: self.nt2id['S']}
+        with pytest.raises(ValueError):
+            DiscRNNGrammar(
+                len(self.word2id), len(self.pos2id), len(self.nt2id), len(self.action2id),
+                self.action2id['SHIFT'], action2nt)
+
+        # More than one REDUCE action IDs
+        action2nt = dict(self.action2nt)
+        action2nt.popitem()
+        with pytest.raises(ValueError):
+            DiscRNNGrammar(
+                len(self.word2id), len(self.pos2id), len(self.nt2id), len(self.action2id),
+                self.action2id['SHIFT'], action2nt)
+
     def test_forward(self):
         words = [self.word2id[w] for w in ['John', 'loves', 'Mary']]
         pos_tags = [self.pos2id[p] for p in ['NNP', 'VBZ', 'NNP']]

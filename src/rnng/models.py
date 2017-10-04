@@ -130,8 +130,17 @@ class DiscRNNGrammar(RNNGrammar):
                  dropout: float = 0.) -> None:
         if shift_action < 0 or shift_action >= num_actions:
             raise ValueError('SHIFT action ID is out of range')
+        for action, nonterm in action2nt.items():
+            if action < 0 or action >= num_actions:
+                raise ValueError('Some action ID in action2nt mapping is out of range')
+            if nonterm < 0 or nonterm >= num_nt:
+                raise ValueError('Some nonterminal ID in action2nt mapping is out of range')
         if shift_action in action2nt:
             raise ValueError('SHIFT action cannot also be NT(X) action')
+        non_reduce = {shift_action}
+        non_reduce.update(action2nt)
+        if len(non_reduce) + 1 != num_actions:
+            raise ValueError('Cannot have more than one REDUCE action IDs')
 
         super().__init__()
         self.num_words = num_words
