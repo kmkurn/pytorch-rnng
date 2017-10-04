@@ -152,6 +152,7 @@ class DiscRNNGrammar(RNNGrammar):
         self._buffer = []  # type: List[WordId]
         self._history = []  # type: List[ActionId]
         self._num_open_nt = 0
+        self._started = False
 
         # Parser state encoders
         self.stack_lstm = StackLSTM(
@@ -246,14 +247,21 @@ class DiscRNNGrammar(RNNGrammar):
         self.buffer_lstm.push(self.buffer_guard)
         self.history_lstm.push(self.history_guard)
 
+        # Initialize input buffer and its LSTM encoder
         words, pos_tags = tuple(zip(*tagged_words))
         self._prepare_embeddings(words, pos_tags)
         for word in reversed(words):
             self._buffer.append(word)
             assert word in self._word_emb
             self.buffer_lstm.push(self._word_emb[word])
+        self._started = True
 
     def do_action(self, action: ActionId) -> None:
+        if not self._started:
+            raise RuntimeError('parser is not started yet, please call `start` method first')
+        if action < 0 or action >= self.num_actions:
+            raise ValueError('action ID is out of range')
+
         legal, message = self._is_legal(action)
         if not legal:
             raise RuntimeError(message)
@@ -272,19 +280,18 @@ class DiscRNNGrammar(RNNGrammar):
                            'perhaps you forgot to call .start() beforehand?')
 
     def forward(self):
-        try:
-            lstms_emb = torch.cat([
-                self.stack_lstm.top, self.buffer_lstm.top, self.history_lstm.top
-            ]).view(1, -1)
-        except TypeError:
-            raise RuntimeError('.start() should be called first')
-        else:
-            parser_summary = self.lstms2summary(lstms_emb)
-            illegal_actions = self._get_illegal_actions()
-            if illegal_actions.dim() == 0:
-                illegal_actions = None
-            return log_softmax(self.summary2actions(parser_summary),
-                               restrictions=illegal_actions).view(-1)
+        if not self._started:
+            raise RuntimeError('parser is not started yet, please call `start` method first')
+
+        lstm_embs = [self.stack_lstm.top, self.buffer_lstm.top, self.history_lstm.top]
+        assert all(emb is not None for emb in lstm_embs)
+        lstms_emb = torch.cat(lstm_embs).view(1, -1)
+        parser_summary = self.lstms2summary(lstms_emb)
+        illegal_actions = self._get_illegal_actions()
+        if illegal_actions.dim() == 0:
+            illegal_actions = None
+        return log_softmax(self.summary2actions(parser_summary),
+                           restrictions=illegal_actions).view(-1)
 
     def _prepare_embeddings(self, words: Collection[WordId], pos_tags: Collection[POSId]):
         assert len(words) == len(pos_tags)

@@ -251,6 +251,25 @@ class TestDiscRNNGrammar:
         with pytest.raises(RuntimeError):
             parser()
 
+    def test_do_action_when_not_started(self):
+        parser = DiscRNNGrammar(
+            len(self.word2id), len(self.pos2id), len(self.nt2id), len(self.action2id),
+            self.action2id['SHIFT'], self.action2nt)
+
+        with pytest.raises(RuntimeError):
+            parser.do_action(self.action2id['SHIFT'])
+
+    def test_invalid_action_id(self):
+        words = [self.word2id[w] for w in ['John', 'loves', 'Mary']]
+        pos_tags = [self.pos2id[p] for p in ['NNP', 'VBZ', 'NNP']]
+        parser = DiscRNNGrammar(
+            len(self.word2id), len(self.pos2id), len(self.nt2id), len(self.action2id),
+            self.action2id['SHIFT'], self.action2nt)
+        parser.start(zip(words, pos_tags))
+
+        with pytest.raises(ValueError):
+            parser.do_action(100)
+
     def test_finished(self):
         words = [self.word2id[w] for w in ['John', 'loves', 'Mary']]
         pos_tags = [self.pos2id[p] for p in ['NNP', 'VBZ', 'NNP']]
