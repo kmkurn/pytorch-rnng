@@ -148,7 +148,7 @@ class TestDiscRNNGrammar:
         parser.start(zip(words, pos_tags))
 
         assert len(parser.stack_buffer) == 0
-        assert parser.input_buffer == tuple(words)
+        assert parser.input_buffer == words
         assert len(parser.action_history) == 0
         assert parser.num_open_nt == 0
         assert not parser.finished
@@ -191,7 +191,7 @@ class TestDiscRNNGrammar:
         assert len(parser.stack_buffer) == 3
         last = parser.stack_buffer[-1]
         assert last == self.word2id['John']
-        assert parser.input_buffer == tuple(words[1:])
+        assert parser.input_buffer == words[1:]
         assert len(parser.action_history) == 3
         assert parser.action_history[-1] == self.action2id['SHIFT']
         assert parser.num_open_nt == prev_num_open_nt

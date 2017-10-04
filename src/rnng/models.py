@@ -1,7 +1,7 @@
 import abc
 from collections import OrderedDict
-from typing import Collection, Mapping, NamedTuple, Sequence, Sized, Tuple, Union
-from typing import Dict, List  # noqa
+from typing import Collection, List, Mapping, NamedTuple, Sequence, Sized, Tuple, Union
+from typing import Dict  # noqa
 
 from nltk.tree import Tree
 import torch
@@ -208,16 +208,16 @@ class DiscRNNGrammar(RNNGrammar):
         self._action_emb = {}  # type: Dict[ActionId, Variable]
 
     @property
-    def stack_buffer(self) -> Sequence[Union[Tree, WordId]]:
-        return tuple(x.subtree for x in self._stack)
+    def stack_buffer(self) -> List[Union[Tree, WordId]]:
+        return [x.subtree for x in self._stack]
 
     @property
-    def input_buffer(self) -> Sequence[WordId]:
-        return tuple(reversed(self._buffer))
+    def input_buffer(self) -> List[WordId]:
+        return list(reversed(self._buffer))
 
     @property
-    def action_history(self) -> Sequence[ActionId]:
-        return tuple(self._history)
+    def action_history(self) -> List[ActionId]:
+        return list(self._history)
 
     @property
     def num_open_nt(self) -> int:
