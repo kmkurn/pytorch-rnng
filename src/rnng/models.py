@@ -408,11 +408,14 @@ class DiscRNNGrammar(RNNGrammar):
         return self._new(illegal_actions).long()
 
     def _is_legal(self, action: ActionId) -> Tuple[bool, str]:
+        assert action >= 0 and action < self.num_actions
         if self.finished:
             return False, 'parsing algorithm already finished, cannot do more action'
 
         nt_actions = self.action2nt.keys()
+        assert all(a >= 0 and a < self.num_actions for a in nt_actions)
         n = self.num_open_nt
+        assert n >= 0
         if action in nt_actions:  # NT(X)
             if len(self._buffer) == 0:
                 return False, 'cannot do NT(X) when input buffer is empty'
