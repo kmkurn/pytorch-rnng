@@ -3,7 +3,8 @@ import pytest
 import torch
 from torch.autograd import Variable
 
-from rnng.models import DiscRNNGrammar, EmptyStackError, StackLSTM, log_softmax
+from rnng.models import (DiscRNNGrammar, EmptyStackError, StackLSTM, log_softmax,
+                         IllegalActionError)
 
 
 class MockLSTM:
@@ -325,6 +326,27 @@ class TestDiscRNNGrammar:
         with pytest.raises(ValueError):
             parser.do_action(len(self.action2id))
 
+    def test_do_illegal_nt_action(self):
+        words = [self.word2id[w] for w in ['John']]
+        pos_tags = [self.pos2id[p] for p in ['NNP']]
+        parser = DiscRNNGrammar(
+            len(self.word2id), len(self.pos2id), len(self.nt2id), len(self.action2id),
+            self.action2id['SHIFT'], self.action2nt)
+
+        # Buffer is empty
+        parser.start(list(zip(words, pos_tags)))
+        parser.do_action(self.action2id['NT(S)'])
+        parser.do_action(self.action2id['SHIFT'])
+        with pytest.raises(IllegalActionError):
+            parser.do_action(self.action2id['NT(NP)'])
+
+        # More than 100 open nonterminals
+        parser.start(list(zip(words, pos_tags)))
+        for i in range(100):
+            parser.do_action(self.action2id['NT(S)'])
+        with pytest.raises(IllegalActionError):
+            parser.do_action(self.action2id['NT(NP)'])
+
     def test_finished(self):
         words = [self.word2id[w] for w in ['John', 'loves', 'Mary']]
         pos_tags = [self.pos2id[p] for p in ['NNP', 'VBZ', 'NNP']]
@@ -358,5 +380,5 @@ class TestDiscRNNGrammar:
         assert parser.finished
         parse_tree = parser.stack_buffer[-1]
         assert str(parse_tree) == str(exp_parse_tree)
-        with pytest.raises(RuntimeError):
+        with pytest.raises(IllegalActionError):
             parser.do_action(self.action2id['REDUCE'])

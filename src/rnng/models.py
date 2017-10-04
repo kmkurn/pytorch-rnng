@@ -93,6 +93,10 @@ class StackElement(NamedTuple):
     is_open_nt: bool
 
 
+class IllegalActionError(Exception):
+    pass
+
+
 class RNNGrammar(nn.Module):
     __metaclass__ = abc.ABCMeta
 
@@ -253,6 +257,8 @@ class DiscRNNGrammar(RNNGrammar):
         self._stack = []
         self._buffer = []
         self._history = []
+        self._num_open_nt = 0
+        self._started = False
 
         while len(self.stack_lstm) > 0:
             self.stack_lstm.pop()
@@ -283,7 +289,7 @@ class DiscRNNGrammar(RNNGrammar):
 
         legal, message = self._is_legal(action)
         if not legal:
-            raise RuntimeError(message)
+            raise IllegalActionError(message)
 
         if action == self.shift_action:
             self._shift()
