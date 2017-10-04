@@ -366,6 +366,26 @@ class TestDiscRNNGrammar:
         with pytest.raises(IllegalActionError):
             parser.do_action(self.action2id['SHIFT'])
 
+    def test_do_illegal_reduce_action(self):
+        words = [self.word2id[w] for w in ['John', 'loves']]
+        pos_tags = [self.pos2id[p] for p in ['NNP', 'VBZ']]
+        parser = DiscRNNGrammar(
+            len(self.word2id), len(self.pos2id), len(self.nt2id), len(self.action2id),
+            self.action2id['SHIFT'], self.action2nt)
+
+        # Top of stack is an open nonterminal
+        parser.start(list(zip(words, pos_tags)))
+        parser.do_action(self.action2id['NT(S)'])
+        with pytest.raises(IllegalActionError):
+            parser.do_action(self.action2id['REDUCE'])
+
+        # Buffer is not empty and REDUCE will finish parsing
+        parser.start(list(zip(words, pos_tags)))
+        parser.do_action(self.action2id['NT(S)'])
+        parser.do_action(self.action2id['SHIFT'])
+        with pytest.raises(IllegalActionError):
+            parser.do_action(self.action2id['REDUCE'])
+
     def test_finished(self):
         words = [self.word2id[w] for w in ['John', 'loves', 'Mary']]
         pos_tags = [self.pos2id[p] for p in ['NNP', 'VBZ', 'NNP']]
