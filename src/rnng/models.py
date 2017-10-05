@@ -117,10 +117,6 @@ class RNNGrammar(nn.Module, metaclass=abc.ABCMeta):
     def start(self, tagged_words: Sequence[Tuple[WordId, POSId]]) -> None:
         pass
 
-    @abc.abstractmethod
-    def do_action(self, action: ActionId) -> None:
-        pass
-
 
 class DiscRNNGrammar(RNNGrammar):
     MAX_OPEN_NT = 100
@@ -280,17 +276,44 @@ class DiscRNNGrammar(RNNGrammar):
         self._started = True
 
     def push_nt(self, nonterm: NTId) -> None:
+        if not self._started:
+            raise RuntimeError('parser is not started yet, please call `start` method first')
+        if self.finished:
+            raise IllegalActionError(
+                'parsing algorithm already finished, cannot do more action')
+
+        self._verify_nt()
         for a, n in self.action2nt.items():
             if nonterm == n:
-                self.do_action(a)
+                self._push_new_open_nt(n)
+                assert a in self._action_emb
+                self._history.append(a)
+                self.history_lstm.push(self._action_emb[a])
                 break
         else:
             raise KeyError('unknown nonterm ID')
 
     def shift(self) -> None:
-        self.do_action(self.shift_action)
+        if not self._started:
+            raise RuntimeError('parser is not started yet, please call `start` method first')
+        if self.finished:
+            raise IllegalActionError(
+                'parsing algorithm already finished, cannot do more action')
+
+        self._verify_shift()
+        self._shift()
+        action = self.shift_action
+        assert action in self._action_emb
+        self._history.append(action)
+        self.history_lstm.push(self._action_emb[action])
 
     def reduce(self) -> None:
+        if not self._started:
+            raise RuntimeError('parser is not started yet, please call `start` method first')
+        if self.finished:
+            raise IllegalActionError(
+                'parsing algorithm already finished, cannot do more action')
+
         non_reduce = {self.shift_action}
         non_reduce.update(self.action2nt)
         reduce_action = None
@@ -298,30 +321,13 @@ class DiscRNNGrammar(RNNGrammar):
             if action not in non_reduce:
                 reduce_action = action
                 break
+
         assert reduce_action is not None
-        self.do_action(reduce_action)
-
-    def do_action(self, action: ActionId) -> None:
-        if not self._started:
-            raise RuntimeError('parser is not started yet, please call `start` method first')
-        if action < 0 or action >= self.num_actions:
-            raise ValueError('action ID is out of range')
-        if self.finished:
-            raise IllegalActionError(
-                'parsing algorithm already finished, cannot do more action')
-
-        if action == self.shift_action:
-            self._verify_shift()
-            self._shift()
-        elif action in self.action2nt:
-            self._verify_nt()
-            self._push_new_open_nt(self.action2nt[action])
-        else:
-            self._verify_reduce()
-            self._reduce()
-        assert action in self._action_emb
-        self._history.append(action)
-        self.history_lstm.push(self._action_emb[action])
+        self._verify_reduce()
+        self._reduce()
+        assert reduce_action in self._action_emb
+        self._history.append(reduce_action)
+        self.history_lstm.push(self._action_emb[reduce_action])
 
     def forward(self):
         if not self._started:
