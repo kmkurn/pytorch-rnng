@@ -242,7 +242,7 @@ class TestDiscRNNGrammar:
         assert isinstance(action_logprobs, Variable)
         assert action_logprobs.size() == (len(self.action2id),)
         sum_prob = action_logprobs.exp().sum().data[0]
-        assert 0.999 <= sum_prob and sum_prob <= 1.001
+        assert 0.999 <= sum_prob <= 1.001
 
     def test_finished(self):
         words = [self.word2id[w] for w in ['John', 'loves', 'Mary']]

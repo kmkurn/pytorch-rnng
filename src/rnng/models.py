@@ -322,11 +322,11 @@ class DiscRNNGrammar(RNNGrammar):
 
     def _prepare_embeddings(self, words: Collection[WordId], pos_tags: Collection[POSId]):
         assert len(words) == len(pos_tags)
-        assert all(w >= 0 and w < self.num_words for w in words)
-        assert all(p >= 0 and p < self.num_pos for p in pos_tags)
+        assert all(0 <= w < self.num_words for w in words)
+        assert all(0 <= p < self.num_pos for p in pos_tags)
 
         nonterms = list(self.nt2action.keys())
-        assert all(n >= 0 and n < self.num_nt for n in nonterms)
+        assert all(0 <= n < self.num_nt for n in nonterms)
         actions = range(self.num_actions)
 
         volatile = not self.training
@@ -407,7 +407,7 @@ class DiscRNNGrammar(RNNGrammar):
         return self._new(illegal_actions).long()
 
     def _is_legal(self, action: ActionId) -> bool:
-        assert action >= 0 and action < self.num_actions
+        assert 0 <= action < self.num_actions
         try:
             if action == self.shift_action:
                 self._verify_shift()
