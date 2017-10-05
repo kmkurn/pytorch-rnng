@@ -355,7 +355,7 @@ class TestDiscRNNGrammar:
         with pytest.raises(RuntimeError):
             parser.reduce()
 
-    def test_do_illegal_nt_action(self):
+    def test_do_illegal_push_nt_action(self):
         words = [self.word2id[w] for w in ['John']]
         pos_tags = [self.pos2id[p] for p in ['NNP']]
         parser = DiscRNNGrammar(
@@ -367,7 +367,7 @@ class TestDiscRNNGrammar:
         parser.push_nt(self.nt2id['S'])
         parser.shift()
         with pytest.raises(IllegalActionError):
-            parser.push_nt(len(self.nt2id))
+            parser.push_nt(self.nt2id['NP'])
 
         # More than 100 open nonterminals
         parser.start(list(zip(words, pos_tags)))
