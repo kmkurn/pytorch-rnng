@@ -279,8 +279,7 @@ class DiscRNNGrammar(RNNGrammar):
         if not self._started:
             raise RuntimeError('parser is not started yet, please call `start` method first')
         if self.finished:
-            raise IllegalActionError(
-                'parsing algorithm already finished, cannot do more action')
+            raise RuntimeError('cannot do more action when parser is finished')
 
         self._verify_nt()
         for a, n in self.action2nt.items():
@@ -297,8 +296,7 @@ class DiscRNNGrammar(RNNGrammar):
         if not self._started:
             raise RuntimeError('parser is not started yet, please call `start` method first')
         if self.finished:
-            raise IllegalActionError(
-                'parsing algorithm already finished, cannot do more action')
+            raise RuntimeError('cannot do more action when parser is finished')
 
         self._verify_shift()
         self._shift()
@@ -311,8 +309,7 @@ class DiscRNNGrammar(RNNGrammar):
         if not self._started:
             raise RuntimeError('parser is not started yet, please call `start` method first')
         if self.finished:
-            raise IllegalActionError(
-                'parsing algorithm already finished, cannot do more action')
+            raise RuntimeError('cannot do more action when parser is finished')
 
         non_reduce = {self.shift_action}
         non_reduce.update(self.action2nt)
