@@ -225,6 +225,61 @@ class TestDiscRNNGrammar:
         assert parser.num_open_nt == prev_num_open_nt - 1
         assert not parser.finished
 
+    def test_forward(self):
+        words = [self.word2id[w] for w in ['John', 'loves', 'Mary']]
+        pos_tags = [self.pos2id[p] for p in ['NNP', 'VBZ', 'NNP']]
+        parser = DiscRNNGrammar(
+            len(self.word2id), len(self.pos2id), len(self.nt2id), len(self.action2id),
+            self.action2id['SHIFT'], self.action2nt)
+        parser.start(list(zip(words, pos_tags)))
+        parser.do_action(self.action2id['NT(S)'])
+        parser.do_action(self.action2id['NT(NP)'])
+        parser.do_action(self.action2id['SHIFT'])
+        parser.do_action(self.action2id['REDUCE'])
+
+        action_logprobs = parser()
+
+        assert isinstance(action_logprobs, Variable)
+        assert action_logprobs.size() == (len(self.action2id),)
+        sum_prob = action_logprobs.exp().sum().data[0]
+        assert 0.999 <= sum_prob and sum_prob <= 1.001
+
+    def test_finished(self):
+        words = [self.word2id[w] for w in ['John', 'loves', 'Mary']]
+        pos_tags = [self.pos2id[p] for p in ['NNP', 'VBZ', 'NNP']]
+        parser = DiscRNNGrammar(
+            len(self.word2id), len(self.pos2id), len(self.nt2id), len(self.action2id),
+            self.action2id['SHIFT'], self.action2nt)
+        exp_parse_tree = Tree(self.nt2id['S'], [
+            Tree(self.nt2id['NP'], [
+                self.word2id['John']]),
+            Tree(self.nt2id['VP'], [
+                self.word2id['loves'],
+                Tree(self.nt2id['NP'], [
+                    self.word2id['Mary']
+                ])
+            ])
+        ])
+
+        parser.start(list(zip(words, pos_tags)))
+        parser.do_action(self.action2id['NT(S)'])
+        parser.do_action(self.action2id['NT(NP)'])
+        parser.do_action(self.action2id['SHIFT'])
+        parser.do_action(self.action2id['REDUCE'])
+        parser.do_action(self.action2id['NT(VP)'])
+        parser.do_action(self.action2id['SHIFT'])
+        parser.do_action(self.action2id['NT(NP)'])
+        parser.do_action(self.action2id['SHIFT'])
+        parser.do_action(self.action2id['REDUCE'])
+        parser.do_action(self.action2id['REDUCE'])
+        parser.do_action(self.action2id['REDUCE'])
+
+        assert parser.finished
+        parse_tree = parser.stack_buffer[-1]
+        assert str(parse_tree) == str(exp_parse_tree)
+        with pytest.raises(IllegalActionError):
+            parser.do_action(self.action2id['REDUCE'])
+
     def test_init_with_invalid_shift_action_id(self):
         with pytest.raises(ValueError):
             DiscRNNGrammar(
@@ -260,25 +315,6 @@ class TestDiscRNNGrammar:
             DiscRNNGrammar(
                 len(self.word2id), len(self.pos2id), len(self.nt2id), len(self.action2id),
                 self.action2id['SHIFT'], action2nt)
-
-    def test_forward(self):
-        words = [self.word2id[w] for w in ['John', 'loves', 'Mary']]
-        pos_tags = [self.pos2id[p] for p in ['NNP', 'VBZ', 'NNP']]
-        parser = DiscRNNGrammar(
-            len(self.word2id), len(self.pos2id), len(self.nt2id), len(self.action2id),
-            self.action2id['SHIFT'], self.action2nt)
-        parser.start(list(zip(words, pos_tags)))
-        parser.do_action(self.action2id['NT(S)'])
-        parser.do_action(self.action2id['NT(NP)'])
-        parser.do_action(self.action2id['SHIFT'])
-        parser.do_action(self.action2id['REDUCE'])
-
-        action_logprobs = parser()
-
-        assert isinstance(action_logprobs, Variable)
-        assert action_logprobs.size() == (len(self.action2id),)
-        sum_prob = action_logprobs.exp().sum().data[0]
-        assert 0.999 <= sum_prob and sum_prob <= 1.001
 
     def test_start_with_empty_tagged_words(self):
         parser = DiscRNNGrammar(
@@ -383,41 +419,5 @@ class TestDiscRNNGrammar:
         parser.start(list(zip(words, pos_tags)))
         parser.do_action(self.action2id['NT(S)'])
         parser.do_action(self.action2id['SHIFT'])
-        with pytest.raises(IllegalActionError):
-            parser.do_action(self.action2id['REDUCE'])
-
-    def test_finished(self):
-        words = [self.word2id[w] for w in ['John', 'loves', 'Mary']]
-        pos_tags = [self.pos2id[p] for p in ['NNP', 'VBZ', 'NNP']]
-        parser = DiscRNNGrammar(
-            len(self.word2id), len(self.pos2id), len(self.nt2id), len(self.action2id),
-            self.action2id['SHIFT'], self.action2nt)
-        exp_parse_tree = Tree(self.nt2id['S'], [
-            Tree(self.nt2id['NP'], [
-                self.word2id['John']]),
-            Tree(self.nt2id['VP'], [
-                self.word2id['loves'],
-                Tree(self.nt2id['NP'], [
-                    self.word2id['Mary']
-                ])
-            ])
-        ])
-
-        parser.start(list(zip(words, pos_tags)))
-        parser.do_action(self.action2id['NT(S)'])
-        parser.do_action(self.action2id['NT(NP)'])
-        parser.do_action(self.action2id['SHIFT'])
-        parser.do_action(self.action2id['REDUCE'])
-        parser.do_action(self.action2id['NT(VP)'])
-        parser.do_action(self.action2id['SHIFT'])
-        parser.do_action(self.action2id['NT(NP)'])
-        parser.do_action(self.action2id['SHIFT'])
-        parser.do_action(self.action2id['REDUCE'])
-        parser.do_action(self.action2id['REDUCE'])
-        parser.do_action(self.action2id['REDUCE'])
-
-        assert parser.finished
-        parse_tree = parser.stack_buffer[-1]
-        assert str(parse_tree) == str(exp_parse_tree)
         with pytest.raises(IllegalActionError):
             parser.do_action(self.action2id['REDUCE'])
