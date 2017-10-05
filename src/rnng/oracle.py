@@ -296,7 +296,7 @@ class OracleDataset(Dataset):
         self.pos_store = TermStore()
         self.nt_store = TermStore()
         self.action_store = TermStore()
-        self.action2nt = {}  # type: Dict[ActionId, NTId]
+        self.nt2action = {}  # type: Dict[NTId, ActionId]
 
         self.load()
 
@@ -311,8 +311,9 @@ class OracleDataset(Dataset):
                 self.action_store.add(a_str)
                 if isinstance(action, NTAction):
                     self.nt_store.add(action.label)
+                    nid = self.nt_store.get_id(action.label)
                     aid = self.action_store.get_id(a_str)
-                    self.action2nt[aid] = self.nt_store.get_id(action.label)
+                    self.nt2action[nid] = aid
 
     def __getitem__(self, index: int) -> Tuple[List[WordId], List[POSId], List[ActionId]]:
         oracle = self.oracles[index]

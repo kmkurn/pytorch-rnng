@@ -154,10 +154,11 @@ class TestOracleDataset:
         assert set(dataset.nt_store) == self.nt_labels
         assert isinstance(dataset.action_store, TermStore)
         assert set(dataset.action_store) == self.actions
-        assert len(dataset.action2nt) == sum(a.startswith('NT(') for a in self.actions)
+        assert len(dataset.nt2action) == len(self.nt_labels)
         for label in self.nt_labels:
-            nt_id = dataset.action2nt[dataset.action_store.get_id(str(NTAction(label)))]
-            assert nt_id == dataset.nt_store.get_id(label)
+            nt_id = dataset.nt_store.get_id(label)
+            action_id = dataset.nt2action[nt_id]
+            assert action_id == dataset.action_store.get_id(str(NTAction(label)))
 
     def test_getitem(self):
         oracles = [DiscOracle.from_parsed_sent(Tree.fromstring(s))
