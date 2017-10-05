@@ -376,6 +376,17 @@ class TestDiscRNNGrammar:
         with pytest.raises(IllegalActionError):
             parser.push_nt(self.nt2id['NP'])
 
+    def test_push_unknown_nt(self):
+        words = [self.word2id[w] for w in ['John']]
+        pos_tags = [self.pos2id[p] for p in ['NNP']]
+        parser = DiscRNNGrammar(
+            len(self.word2id), len(self.pos2id), len(self.nt2id), len(self.action2id),
+            self.action2id['SHIFT'], self.action2nt)
+        parser.start(list(zip(words, pos_tags)))
+
+        with pytest.raises(KeyError):
+            parser.push_nt(len(self.nt2id))
+
     def test_do_illegal_shift_action(self):
         words = [self.word2id[w] for w in ['John']]
         pos_tags = [self.pos2id[p] for p in ['NNP']]

@@ -287,7 +287,7 @@ class DiscRNNGrammar(RNNGrammar):
                 self.do_action(a)
                 break
         else:
-            raise IllegalActionError('nonterm ID is not found')
+            raise KeyError('unknown nonterm ID')
 
     def shift(self) -> None:
         self.do_action(self.shift_action)
