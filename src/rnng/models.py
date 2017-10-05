@@ -290,10 +290,9 @@ class DiscRNNGrammar(RNNGrammar):
     def shift(self) -> None:
         self._verify_shift()
         self._shift()
-        action = self.shift_action
-        assert action in self._action_emb
-        self._history.append(action)
-        self.history_lstm.push(self._action_emb[action])
+        assert self.shift_action in self._action_emb
+        self._history.append(self.shift_action)
+        self.history_lstm.push(self._action_emb[self.shift_action])
 
     def reduce(self) -> None:
         self._verify_reduce()
