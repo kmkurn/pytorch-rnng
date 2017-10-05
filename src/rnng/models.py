@@ -97,9 +97,7 @@ class IllegalActionError(Exception):
     pass
 
 
-class RNNGrammar(nn.Module):
-    __metaclass__ = abc.ABCMeta
-
+class RNNGrammar(nn.Module, metaclass=abc.ABCMeta):
     @property
     @abc.abstractmethod
     def stack_buffer(self) -> Sequence[Union[Tree, WordId]]:
