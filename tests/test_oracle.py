@@ -31,7 +31,7 @@ class TestReduceAction:
 
     def test_from_invalid_string(self):
         with pytest.raises(ValueError):
-            ShiftAction.from_string('asdf')
+            ReduceAction.from_string('asdf')
 
 
 class TestNTAction:
