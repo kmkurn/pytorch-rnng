@@ -1,12 +1,12 @@
 import abc
-from typing import List, Sequence, Tuple
+from typing import List, Sequence
 from typing import Dict, Type  # noqa
 
 from nltk.tree import Tree
 from torch.utils.data import Dataset
 
-from rnng.typing import ActionId, NTLabel, POSId, POSTag, Word, WordId
-from rnng.typing import NTId  # noqa
+from rnng.typing import NTLabel, POSTag, Word
+from rnng.typing import ActionId, NTId  # noqa
 from rnng.utils import TermStore
 
 
@@ -315,12 +315,8 @@ class OracleDataset(Dataset):
                     aid = self.action_store.get_id(a_str)
                     self.nt2action[nid] = aid
 
-    def __getitem__(self, index: int) -> Tuple[List[WordId], List[POSId], List[ActionId]]:
-        oracle = self.oracles[index]
-        word_ids = [self.word_store.get_id(w) for w in oracle.words]
-        pos_ids = [self.pos_store.get_id(p) for p in oracle.pos_tags]
-        action_ids = [self.action_store.get_id(str(a)) for a in oracle.actions]
-        return word_ids, pos_ids, action_ids
+    def __getitem__(self, index: int) -> Oracle:
+        return self.oracles[index]
 
     def __len__(self) -> int:
         return len(self.oracles)

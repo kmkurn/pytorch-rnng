@@ -165,18 +165,5 @@ class TestOracleDataset:
                    for s in self.bracketed_sents]
         dataset = OracleDataset(oracles)
 
-        words, pos_tags, actions = dataset[0]
-        assert [dataset.word_store.get_term(wid) for wid in words] == ['John', 'loves', 'Mary']
-        assert [dataset.pos_store.get_term(pid) for pid in pos_tags] == ['NNP', 'VBZ', 'NNP']
-        assert [dataset.action_store.get_term(aid) for aid in actions] == [
-            str(NTAction('S')), str(NTAction('NP')), str(ShiftAction()), str(ReduceAction()),
-            str(NTAction('VP')), str(ShiftAction()), str(NTAction('NP')), str(ShiftAction()),
-            str(ReduceAction()), str(ReduceAction()), str(ReduceAction())]
-
-        words, pos_tags, actions = dataset[1]
-        assert [dataset.word_store.get_term(wid) for wid in words] == ['Mary', 'hates', 'John']
-        assert [dataset.pos_store.get_term(pid) for pid in pos_tags] == ['NNP', 'VBZ', 'NNP']
-        assert [dataset.action_store.get_term(aid) for aid in actions] == [
-            str(NTAction('S')), str(NTAction('NP')), str(ShiftAction()), str(ReduceAction()),
-            str(NTAction('VP')), str(ShiftAction()), str(NTAction('NP')), str(ShiftAction()),
-            str(ReduceAction()), str(ReduceAction()), str(ReduceAction())]
+        assert oracles[0] is dataset[0]
+        assert oracles[1] is dataset[1]
