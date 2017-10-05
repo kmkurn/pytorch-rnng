@@ -124,14 +124,14 @@ def test_log_softmax():
 class TestDiscRNNGrammar:
     word2id = {'John': 0, 'loves': 1, 'Mary': 2}
     pos2id = {'NNP': 0, 'VBZ': 1}
-    nt2id = {'S': 0, 'NP': 1, 'VP': 2}
+    nt2id = {'S': 2, 'NP': 1, 'VP': 0}
     action2id = {'NT(S)': 0, 'NT(NP)': 1, 'NT(VP)': 2, 'SHIFT': 3, 'REDUCE': 4}
-    action2nt = {0: 0, 1: 1, 2: 2}
+    nt2action = {2: 0, 1: 1, 0: 2}
 
     def test_init(self):
         parser = DiscRNNGrammar(
             len(self.word2id), len(self.pos2id), len(self.nt2id), len(self.action2id),
-            self.action2id['SHIFT'], self.action2nt)
+            self.action2id['SHIFT'], self.nt2action)
 
         assert len(parser.stack_buffer) == 0
         assert len(parser.input_buffer) == 0
@@ -144,7 +144,7 @@ class TestDiscRNNGrammar:
         pos_tags = [self.pos2id[p] for p in ['NNP', 'VBZ', 'NNP']]
         parser = DiscRNNGrammar(
             len(self.word2id), len(self.pos2id), len(self.nt2id), len(self.action2id),
-            self.action2id['SHIFT'], self.action2nt)
+            self.action2id['SHIFT'], self.nt2action)
 
         parser.start(list(zip(words, pos_tags)))
 
@@ -159,7 +159,7 @@ class TestDiscRNNGrammar:
         pos_tags = [self.pos2id[p] for p in ['NNP', 'VBZ', 'NNP']]
         parser = DiscRNNGrammar(
             len(self.word2id), len(self.pos2id), len(self.nt2id), len(self.action2id),
-            self.action2id['SHIFT'], self.action2nt)
+            self.action2id['SHIFT'], self.nt2action)
         parser.start(list(zip(words, pos_tags)))
         prev_input_buffer = parser.input_buffer
 
@@ -181,7 +181,7 @@ class TestDiscRNNGrammar:
         pos_tags = [self.pos2id[p] for p in ['NNP', 'VBZ', 'NNP']]
         parser = DiscRNNGrammar(
             len(self.word2id), len(self.pos2id), len(self.nt2id), len(self.action2id),
-            self.action2id['SHIFT'], self.action2nt)
+            self.action2id['SHIFT'], self.nt2action)
         parser.start(list(zip(words, pos_tags)))
         parser.push_nt(self.nt2id['S'])
         parser.push_nt(self.nt2id['NP'])
@@ -203,7 +203,7 @@ class TestDiscRNNGrammar:
         pos_tags = [self.pos2id[p] for p in ['NNP', 'VBZ', 'NNP']]
         parser = DiscRNNGrammar(
             len(self.word2id), len(self.pos2id), len(self.nt2id), len(self.action2id),
-            self.action2id['SHIFT'], self.action2nt)
+            self.action2id['SHIFT'], self.nt2action)
         parser.start(list(zip(words, pos_tags)))
         parser.push_nt(self.nt2id['S'])
         parser.push_nt(self.nt2id['NP'])
@@ -230,7 +230,7 @@ class TestDiscRNNGrammar:
         pos_tags = [self.pos2id[p] for p in ['NNP', 'VBZ', 'NNP']]
         parser = DiscRNNGrammar(
             len(self.word2id), len(self.pos2id), len(self.nt2id), len(self.action2id),
-            self.action2id['SHIFT'], self.action2nt)
+            self.action2id['SHIFT'], self.nt2action)
         parser.start(list(zip(words, pos_tags)))
         parser.push_nt(self.nt2id['S'])
         parser.push_nt(self.nt2id['NP'])
@@ -249,7 +249,7 @@ class TestDiscRNNGrammar:
         pos_tags = [self.pos2id[p] for p in ['NNP', 'VBZ', 'NNP']]
         parser = DiscRNNGrammar(
             len(self.word2id), len(self.pos2id), len(self.nt2id), len(self.action2id),
-            self.action2id['SHIFT'], self.action2nt)
+            self.action2id['SHIFT'], self.nt2action)
         exp_parse_tree = Tree(self.nt2id['S'], [
             Tree(self.nt2id['NP'], [
                 self.word2id['John']]),
@@ -288,42 +288,42 @@ class TestDiscRNNGrammar:
         with pytest.raises(ValueError):
             DiscRNNGrammar(
                 len(self.word2id), len(self.pos2id), len(self.nt2id), len(self.action2id),
-                len(self.action2id), self.action2nt)
+                len(self.action2id), self.nt2action)
 
-    def test_init_with_invalid_action2nt_mapping(self):
-        # Action ID out of range
-        action2nt = {len(self.action2id): self.nt2id['S']}
-        with pytest.raises(ValueError):
-            DiscRNNGrammar(
-                len(self.word2id), len(self.pos2id), len(self.nt2id), len(self.action2id),
-                self.action2id['SHIFT'], action2nt)
-
+    def test_init_with_invalid_nt2action_mapping(self):
         # Nonterminal ID out of range
-        action2nt = {self.action2id['NT(S)']: len(self.nt2id)}
+        nt2action = {len(self.nt2id): self.action2id['NT(S)']}
         with pytest.raises(ValueError):
             DiscRNNGrammar(
                 len(self.word2id), len(self.pos2id), len(self.nt2id), len(self.action2id),
-                self.action2id['SHIFT'], action2nt)
+                self.action2id['SHIFT'], nt2action)
+
+        # Action ID out of range
+        nt2action = {self.nt2id['S']: len(self.action2id)}
+        with pytest.raises(ValueError):
+            DiscRNNGrammar(
+                len(self.word2id), len(self.pos2id), len(self.nt2id), len(self.action2id),
+                self.action2id['SHIFT'], nt2action)
 
         # SHIFT action ID is also an NT(X) action ID
-        action2nt = {self.action2id['SHIFT']: self.nt2id['S']}
+        nt2action = {self.nt2id['S']: self.action2id['SHIFT']}
         with pytest.raises(ValueError):
             DiscRNNGrammar(
                 len(self.word2id), len(self.pos2id), len(self.nt2id), len(self.action2id),
-                self.action2id['SHIFT'], action2nt)
+                self.action2id['SHIFT'], nt2action)
 
         # More than one REDUCE action IDs
-        action2nt = dict(self.action2nt)
-        action2nt.popitem()
+        nt2action = dict(self.nt2action)
+        nt2action.popitem()
         with pytest.raises(ValueError):
             DiscRNNGrammar(
                 len(self.word2id), len(self.pos2id), len(self.nt2id), len(self.action2id),
-                self.action2id['SHIFT'], action2nt)
+                self.action2id['SHIFT'], nt2action)
 
     def test_start_with_empty_tagged_words(self):
         parser = DiscRNNGrammar(
             len(self.word2id), len(self.pos2id), len(self.nt2id), len(self.action2id),
-            self.action2id['SHIFT'], self.action2nt)
+            self.action2id['SHIFT'], self.nt2action)
 
         with pytest.raises(ValueError):
             parser.start([])
@@ -331,7 +331,7 @@ class TestDiscRNNGrammar:
     def test_start_with_invalid_word_or_pos(self):
         parser = DiscRNNGrammar(
             len(self.word2id), len(self.pos2id), len(self.nt2id), len(self.action2id),
-            self.action2id['SHIFT'], self.action2nt)
+            self.action2id['SHIFT'], self.nt2action)
 
         with pytest.raises(ValueError):
             parser.start([(len(self.word2id), self.pos2id['NNP'])])
@@ -342,7 +342,7 @@ class TestDiscRNNGrammar:
     def test_forward_when_not_started(self):
         parser = DiscRNNGrammar(
             len(self.word2id), len(self.pos2id), len(self.nt2id), len(self.action2id),
-            self.action2id['SHIFT'], self.action2nt)
+            self.action2id['SHIFT'], self.nt2action)
 
         with pytest.raises(RuntimeError):
             parser()
@@ -350,7 +350,7 @@ class TestDiscRNNGrammar:
     def test_do_action_when_not_started(self):
         parser = DiscRNNGrammar(
             len(self.word2id), len(self.pos2id), len(self.nt2id), len(self.action2id),
-            self.action2id['SHIFT'], self.action2nt)
+            self.action2id['SHIFT'], self.nt2action)
 
         with pytest.raises(RuntimeError):
             parser.push_nt(self.nt2id['S'])
@@ -364,7 +364,7 @@ class TestDiscRNNGrammar:
         pos_tags = [self.pos2id[p] for p in ['NNP']]
         parser = DiscRNNGrammar(
             len(self.word2id), len(self.pos2id), len(self.nt2id), len(self.action2id),
-            self.action2id['SHIFT'], self.action2nt)
+            self.action2id['SHIFT'], self.nt2action)
 
         # Buffer is empty
         parser.start(list(zip(words, pos_tags)))
@@ -385,7 +385,7 @@ class TestDiscRNNGrammar:
         pos_tags = [self.pos2id[p] for p in ['NNP']]
         parser = DiscRNNGrammar(
             len(self.word2id), len(self.pos2id), len(self.nt2id), len(self.action2id),
-            self.action2id['SHIFT'], self.action2nt)
+            self.action2id['SHIFT'], self.nt2action)
         parser.start(list(zip(words, pos_tags)))
 
         with pytest.raises(KeyError):
@@ -396,7 +396,7 @@ class TestDiscRNNGrammar:
         pos_tags = [self.pos2id[p] for p in ['NNP']]
         parser = DiscRNNGrammar(
             len(self.word2id), len(self.pos2id), len(self.nt2id), len(self.action2id),
-            self.action2id['SHIFT'], self.action2nt)
+            self.action2id['SHIFT'], self.nt2action)
 
         # No open nonterminal
         parser.start(list(zip(words, pos_tags)))
@@ -415,7 +415,7 @@ class TestDiscRNNGrammar:
         pos_tags = [self.pos2id[p] for p in ['NNP', 'VBZ']]
         parser = DiscRNNGrammar(
             len(self.word2id), len(self.pos2id), len(self.nt2id), len(self.action2id),
-            self.action2id['SHIFT'], self.action2nt)
+            self.action2id['SHIFT'], self.nt2action)
 
         # Top of stack is an open nonterminal
         parser.start(list(zip(words, pos_tags)))

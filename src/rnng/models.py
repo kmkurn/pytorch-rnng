@@ -122,21 +122,21 @@ class DiscRNNGrammar(RNNGrammar):
     MAX_OPEN_NT = 100
 
     def __init__(self, num_words: int, num_pos: int, num_nt: int, num_actions: int,
-                 shift_action: ActionId, action2nt: Mapping[ActionId, NTId],
+                 shift_action: ActionId, nt2action: Mapping[NTId, ActionId],
                  word_dim: int = 32, pos_dim: int = 12, nt_dim: int = 60, action_dim: int = 16,
                  input_dim: int = 128, hidden_dim: int = 128, num_layers: int = 2,
                  dropout: float = 0.) -> None:
         if shift_action < 0 or shift_action >= num_actions:
             raise ValueError('SHIFT action ID is out of range')
-        for action, nonterm in action2nt.items():
+        for nonterm, action in nt2action.items():
             if action < 0 or action >= num_actions:
                 raise ValueError('Some action ID in action2nt mapping is out of range')
             if nonterm < 0 or nonterm >= num_nt:
                 raise ValueError('Some nonterminal ID in action2nt mapping is out of range')
-        if shift_action in action2nt:
+        if shift_action in nt2action.values():
             raise ValueError('SHIFT action cannot also be NT(X) action')
         non_reduce = {shift_action}
-        non_reduce.update(action2nt)
+        non_reduce.update(nt2action.values())
         if len(non_reduce) + 1 != num_actions:
             raise ValueError('Cannot have more than one REDUCE action IDs')
 
@@ -146,7 +146,6 @@ class DiscRNNGrammar(RNNGrammar):
         self.num_nt = num_nt
         self.num_actions = num_actions
         self.shift_action = shift_action
-        self.action2nt = action2nt
         self.word_dim = word_dim
         self.pos_dim = pos_dim
         self.nt_dim = nt_dim
@@ -160,7 +159,7 @@ class DiscRNNGrammar(RNNGrammar):
             if a not in non_reduce:
                 self._reduce_action = a
         assert self._reduce_action is not None
-        self._nt2action = {n: a for a, n in action2nt.items()}
+        self._nt2action = nt2action
 
         # Parser states
         self._stack = []  # type: List[StackElement]
@@ -326,7 +325,7 @@ class DiscRNNGrammar(RNNGrammar):
         assert all(w >= 0 and w < self.num_words for w in words)
         assert all(p >= 0 and p < self.num_pos for p in pos_tags)
 
-        nonterms = list(self.action2nt.values())
+        nonterms = list(self._nt2action.keys())
         assert all(n >= 0 and n < self.num_nt for n in nonterms)
         actions = range(self.num_actions)
 
@@ -410,12 +409,12 @@ class DiscRNNGrammar(RNNGrammar):
     def _is_legal(self, action: ActionId) -> bool:
         assert action >= 0 and action < self.num_actions
         try:
-            if action in self.action2nt:
-                self._verify_nt()
-            elif action == self.shift_action:
+            if action == self.shift_action:
                 self._verify_shift()
-            else:
+            elif action == self._reduce_action:
                 self._verify_reduce()
+            else:
+                self._verify_nt()
         except IllegalActionError:
             return False
         else:
@@ -445,9 +444,8 @@ class DiscRNNGrammar(RNNGrammar):
 
     def _verify_reduce(self) -> None:
         self._verify_action()
-        assert all(a >= 0 and a < self.num_actions for a in self.action2nt)
         assert self.num_open_nt >= 0
-        last_is_nt = len(self._history) > 0 and self._history[-1] in self.action2nt
+        last_is_nt = len(self._history) > 0 and self._history[-1] in self._nt2action.values()
         if last_is_nt:
             raise IllegalActionError(
                 'cannot REDUCE when top of stack is an open nonterminal')
