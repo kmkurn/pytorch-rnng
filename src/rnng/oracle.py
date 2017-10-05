@@ -10,9 +10,7 @@ from rnng.typing import ActionId, NTId  # noqa
 from rnng.utils import TermStore
 
 
-class Action:
-    __metaclass__ = abc.ABCMeta
-
+class Action(metaclass=abc.ABCMeta):
     @abc.abstractmethod
     def __str__(self) -> str:
         pass
