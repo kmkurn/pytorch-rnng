@@ -163,7 +163,7 @@ class TestDiscRNNGrammar:
         parser.start(list(zip(words, pos_tags)))
         prev_input_buffer = parser.input_buffer
 
-        parser.do_action(self.action2id['NT(S)'])
+        parser.push_nt(self.nt2id['S'])
 
         assert len(parser.stack_buffer) == 1
         last = parser.stack_buffer[-1]
@@ -183,11 +183,11 @@ class TestDiscRNNGrammar:
             len(self.word2id), len(self.pos2id), len(self.nt2id), len(self.action2id),
             self.action2id['SHIFT'], self.action2nt)
         parser.start(list(zip(words, pos_tags)))
-        parser.do_action(self.action2id['NT(S)'])
-        parser.do_action(self.action2id['NT(NP)'])
+        parser.push_nt(self.nt2id['S'])
+        parser.push_nt(self.nt2id['NP'])
         prev_num_open_nt = parser.num_open_nt
 
-        parser.do_action(self.action2id['SHIFT'])
+        parser.shift()
 
         assert len(parser.stack_buffer) == 3
         last = parser.stack_buffer[-1]
@@ -205,13 +205,13 @@ class TestDiscRNNGrammar:
             len(self.word2id), len(self.pos2id), len(self.nt2id), len(self.action2id),
             self.action2id['SHIFT'], self.action2nt)
         parser.start(list(zip(words, pos_tags)))
-        parser.do_action(self.action2id['NT(S)'])
-        parser.do_action(self.action2id['NT(NP)'])
-        parser.do_action(self.action2id['SHIFT'])
+        parser.push_nt(self.nt2id['S'])
+        parser.push_nt(self.nt2id['NP'])
+        parser.shift()
         prev_input_buffer = parser.input_buffer
         prev_num_open_nt = parser.num_open_nt
 
-        parser.do_action(self.action2id['REDUCE'])
+        parser.reduce()
 
         assert len(parser.stack_buffer) == 2
         last = parser.stack_buffer[-1]
@@ -232,10 +232,10 @@ class TestDiscRNNGrammar:
             len(self.word2id), len(self.pos2id), len(self.nt2id), len(self.action2id),
             self.action2id['SHIFT'], self.action2nt)
         parser.start(list(zip(words, pos_tags)))
-        parser.do_action(self.action2id['NT(S)'])
-        parser.do_action(self.action2id['NT(NP)'])
-        parser.do_action(self.action2id['SHIFT'])
-        parser.do_action(self.action2id['REDUCE'])
+        parser.push_nt(self.nt2id['S'])
+        parser.push_nt(self.nt2id['NP'])
+        parser.shift()
+        parser.reduce()
 
         action_logprobs = parser()
 
@@ -262,23 +262,23 @@ class TestDiscRNNGrammar:
         ])
 
         parser.start(list(zip(words, pos_tags)))
-        parser.do_action(self.action2id['NT(S)'])
-        parser.do_action(self.action2id['NT(NP)'])
-        parser.do_action(self.action2id['SHIFT'])
-        parser.do_action(self.action2id['REDUCE'])
-        parser.do_action(self.action2id['NT(VP)'])
-        parser.do_action(self.action2id['SHIFT'])
-        parser.do_action(self.action2id['NT(NP)'])
-        parser.do_action(self.action2id['SHIFT'])
-        parser.do_action(self.action2id['REDUCE'])
-        parser.do_action(self.action2id['REDUCE'])
-        parser.do_action(self.action2id['REDUCE'])
+        parser.push_nt(self.nt2id['S'])
+        parser.push_nt(self.nt2id['NP'])
+        parser.shift()
+        parser.reduce()
+        parser.push_nt(self.nt2id['VP'])
+        parser.shift()
+        parser.push_nt(self.nt2id['NP'])
+        parser.shift()
+        parser.reduce()
+        parser.reduce()
+        parser.reduce()
 
         assert parser.finished
         parse_tree = parser.stack_buffer[-1]
         assert str(parse_tree) == str(exp_parse_tree)
         with pytest.raises(IllegalActionError):
-            parser.do_action(self.action2id['REDUCE'])
+            parser.reduce()
 
     def test_init_with_invalid_shift_action_id(self):
         with pytest.raises(ValueError):
@@ -349,18 +349,11 @@ class TestDiscRNNGrammar:
             self.action2id['SHIFT'], self.action2nt)
 
         with pytest.raises(RuntimeError):
-            parser.do_action(self.action2id['SHIFT'])
-
-    def test_do_invalid_action(self):
-        words = [self.word2id[w] for w in ['John', 'loves', 'Mary']]
-        pos_tags = [self.pos2id[p] for p in ['NNP', 'VBZ', 'NNP']]
-        parser = DiscRNNGrammar(
-            len(self.word2id), len(self.pos2id), len(self.nt2id), len(self.action2id),
-            self.action2id['SHIFT'], self.action2nt)
-        parser.start(list(zip(words, pos_tags)))
-
-        with pytest.raises(ValueError):
-            parser.do_action(len(self.action2id))
+            parser.push_nt(self.nt2id['S'])
+        with pytest.raises(RuntimeError):
+            parser.shift()
+        with pytest.raises(RuntimeError):
+            parser.reduce()
 
     def test_do_illegal_nt_action(self):
         words = [self.word2id[w] for w in ['John']]
@@ -371,17 +364,17 @@ class TestDiscRNNGrammar:
 
         # Buffer is empty
         parser.start(list(zip(words, pos_tags)))
-        parser.do_action(self.action2id['NT(S)'])
-        parser.do_action(self.action2id['SHIFT'])
+        parser.push_nt(self.nt2id['S'])
+        parser.shift()
         with pytest.raises(IllegalActionError):
-            parser.do_action(self.action2id['NT(NP)'])
+            parser.push_nt(len(self.nt2id))
 
         # More than 100 open nonterminals
         parser.start(list(zip(words, pos_tags)))
         for i in range(100):
-            parser.do_action(self.action2id['NT(S)'])
+            parser.push_nt(self.nt2id['S'])
         with pytest.raises(IllegalActionError):
-            parser.do_action(self.action2id['NT(NP)'])
+            parser.push_nt(self.nt2id['NP'])
 
     def test_do_illegal_shift_action(self):
         words = [self.word2id[w] for w in ['John']]
@@ -393,14 +386,14 @@ class TestDiscRNNGrammar:
         # No open nonterminal
         parser.start(list(zip(words, pos_tags)))
         with pytest.raises(IllegalActionError):
-            parser.do_action(self.action2id['SHIFT'])
+            parser.shift()
 
         # Buffer is empty
         parser.start(list(zip(words, pos_tags)))
-        parser.do_action(self.action2id['NT(S)'])
-        parser.do_action(self.action2id['SHIFT'])
+        parser.push_nt(self.nt2id['S'])
+        parser.shift()
         with pytest.raises(IllegalActionError):
-            parser.do_action(self.action2id['SHIFT'])
+            parser.shift()
 
     def test_do_illegal_reduce_action(self):
         words = [self.word2id[w] for w in ['John', 'loves']]
@@ -411,13 +404,13 @@ class TestDiscRNNGrammar:
 
         # Top of stack is an open nonterminal
         parser.start(list(zip(words, pos_tags)))
-        parser.do_action(self.action2id['NT(S)'])
+        parser.push_nt(self.nt2id['S'])
         with pytest.raises(IllegalActionError):
-            parser.do_action(self.action2id['REDUCE'])
+            parser.reduce()
 
         # Buffer is not empty and REDUCE will finish parsing
         parser.start(list(zip(words, pos_tags)))
-        parser.do_action(self.action2id['NT(S)'])
-        parser.do_action(self.action2id['SHIFT'])
+        parser.push_nt(self.nt2id['S'])
+        parser.shift()
         with pytest.raises(IllegalActionError):
-            parser.do_action(self.action2id['REDUCE'])
+            parser.reduce()

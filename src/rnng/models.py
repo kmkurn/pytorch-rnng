@@ -281,6 +281,28 @@ class DiscRNNGrammar(RNNGrammar):
             self.buffer_lstm.push(self._word_emb[word])
         self._started = True
 
+    def push_nt(self, nonterm: NTId) -> None:
+        for a, n in self.action2nt.items():
+            if nonterm == n:
+                self.do_action(a)
+                break
+        else:
+            raise IllegalActionError('nonterm ID is not found')
+
+    def shift(self) -> None:
+        self.do_action(self.shift_action)
+
+    def reduce(self) -> None:
+        non_reduce = {self.shift_action}
+        non_reduce.update(self.action2nt)
+        reduce_action = None
+        for action in range(self.num_actions):
+            if action not in non_reduce:
+                reduce_action = action
+                break
+        assert reduce_action is not None
+        self.do_action(reduce_action)
+
     def do_action(self, action: ActionId) -> None:
         if not self._started:
             raise RuntimeError('parser is not started yet, please call `start` method first')
