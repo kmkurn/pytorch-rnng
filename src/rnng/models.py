@@ -276,11 +276,6 @@ class DiscRNNGrammar(RNNGrammar):
         self._started = True
 
     def push_nt(self, nonterm: NTId) -> None:
-        if not self._started:
-            raise RuntimeError('parser is not started yet, please call `start` method first')
-        if self.finished:
-            raise RuntimeError('cannot do more action when parser is finished')
-
         self._verify_nt()
         for a, n in self.action2nt.items():
             if nonterm == n:
@@ -293,11 +288,6 @@ class DiscRNNGrammar(RNNGrammar):
             raise KeyError('unknown nonterm ID')
 
     def shift(self) -> None:
-        if not self._started:
-            raise RuntimeError('parser is not started yet, please call `start` method first')
-        if self.finished:
-            raise RuntimeError('cannot do more action when parser is finished')
-
         self._verify_shift()
         self._shift()
         action = self.shift_action
@@ -306,11 +296,7 @@ class DiscRNNGrammar(RNNGrammar):
         self.history_lstm.push(self._action_emb[action])
 
     def reduce(self) -> None:
-        if not self._started:
-            raise RuntimeError('parser is not started yet, please call `start` method first')
-        if self.finished:
-            raise RuntimeError('cannot do more action when parser is finished')
-
+        self._verify_reduce()
         non_reduce = {self.shift_action}
         non_reduce.update(self.action2nt)
         reduce_action = None
@@ -320,7 +306,6 @@ class DiscRNNGrammar(RNNGrammar):
                 break
 
         assert reduce_action is not None
-        self._verify_reduce()
         self._reduce()
         assert reduce_action in self._action_emb
         self._history.append(reduce_action)
@@ -440,7 +425,14 @@ class DiscRNNGrammar(RNNGrammar):
         else:
             return True
 
+    def _verify_action(self) -> None:
+        if not self._started:
+            raise RuntimeError('parser is not started yet, please call `start` method first')
+        if self.finished:
+            raise RuntimeError('cannot do more action when parser is finished')
+
     def _verify_nt(self) -> None:
+        self._verify_action()
         assert self.num_open_nt >= 0
         if len(self._buffer) == 0:
             raise IllegalActionError('cannot do NT(X) when input buffer is empty')
@@ -448,6 +440,7 @@ class DiscRNNGrammar(RNNGrammar):
             raise IllegalActionError('max number of open nonterminals is reached')
 
     def _verify_shift(self) -> None:
+        self._verify_action()
         assert self.num_open_nt >= 0
         if len(self._buffer) == 0:
             raise IllegalActionError('cannot SHIFT when input buffer is empty')
@@ -455,6 +448,7 @@ class DiscRNNGrammar(RNNGrammar):
             raise IllegalActionError('cannot SHIFT when no open nonterminal exists')
 
     def _verify_reduce(self) -> None:
+        self._verify_action()
         assert all(a >= 0 and a < self.num_actions for a in self.action2nt)
         assert self.num_open_nt >= 0
         last_is_nt = len(self._history) > 0 and self._history[-1] in self.action2nt
