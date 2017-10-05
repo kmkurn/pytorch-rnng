@@ -160,6 +160,7 @@ class DiscRNNGrammar(RNNGrammar):
             if a not in non_reduce:
                 self._reduce_action = a
         assert self._reduce_action is not None
+        self._nt2action = {n: a for a, n in action2nt.items()}
 
         # Parser states
         self._stack = []  # type: List[StackElement]
@@ -282,15 +283,15 @@ class DiscRNNGrammar(RNNGrammar):
 
     def push_nt(self, nonterm: NTId) -> None:
         self._verify_nt()
-        for a, n in self.action2nt.items():
-            if nonterm == n:
-                self._push_new_open_nt(n)
-                assert a in self._action_emb
-                self._history.append(a)
-                self.history_lstm.push(self._action_emb[a])
-                break
+        try:
+            action = self._nt2action[nonterm]
+        except KeyError:
+            raise KeyError(f'unknown nonterminal ID: {nonterm}')
         else:
-            raise KeyError('unknown nonterm ID')
+            self._push_nt(nonterm)
+            assert action in self._action_emb
+            self._history.append(action)
+            self.history_lstm.push(self._action_emb[action])
 
     def shift(self) -> None:
         self._verify_shift()
@@ -374,7 +375,7 @@ class DiscRNNGrammar(RNNGrammar):
         self._num_open_nt -= 1
         assert self._num_open_nt >= 0
 
-    def _push_new_open_nt(self, nonterm: NTId) -> None:
+    def _push_nt(self, nonterm: NTId) -> None:
         assert nonterm in self._nt_emb
         self._stack.append(
             StackElement(Tree(nonterm, []), self._nt_emb[nonterm], True))
