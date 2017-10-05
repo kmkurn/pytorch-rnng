@@ -117,6 +117,18 @@ class RNNGrammar(nn.Module, metaclass=abc.ABCMeta):
     def start(self, tagged_words: Sequence[Tuple[WordId, POSId]]) -> None:
         pass
 
+    @abc.abstractmethod
+    def shift(self) -> None:
+        pass
+
+    @abc.abstractmethod
+    def reduce(self) -> None:
+        pass
+
+    @abc.abstractmethod
+    def push_nt(self, nonterm: NTId) -> None:
+        pass
+
 
 class DiscRNNGrammar(RNNGrammar):
     MAX_OPEN_NT = 100
