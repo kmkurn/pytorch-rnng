@@ -235,10 +235,6 @@ class DiscRNNGrammar(RNNGrammar):
         return list(self._history)
 
     @property
-    def num_open_nt(self) -> int:
-        return self._num_open_nt
-
-    @property
     def finished(self) -> bool:
         return (len(self._stack) == 1
                 and not self._stack[0].is_open_nt
@@ -428,28 +424,25 @@ class DiscRNNGrammar(RNNGrammar):
 
     def _verify_nt(self) -> None:
         self._verify_action()
-        assert self.num_open_nt >= 0
         if len(self._buffer) == 0:
             raise IllegalActionError('cannot do NT(X) when input buffer is empty')
-        if self.num_open_nt >= self.MAX_OPEN_NT:
+        if self._num_open_nt >= self.MAX_OPEN_NT:
             raise IllegalActionError('max number of open nonterminals is reached')
 
     def _verify_shift(self) -> None:
         self._verify_action()
-        assert self.num_open_nt >= 0
         if len(self._buffer) == 0:
             raise IllegalActionError('cannot SHIFT when input buffer is empty')
-        if self.num_open_nt == 0:
+        if self._num_open_nt == 0:
             raise IllegalActionError('cannot SHIFT when no open nonterminal exists')
 
     def _verify_reduce(self) -> None:
         self._verify_action()
-        assert self.num_open_nt >= 0
         last_is_nt = len(self._history) > 0 and self._history[-1] in self.nt2action.values()
         if last_is_nt:
             raise IllegalActionError(
                 'cannot REDUCE when top of stack is an open nonterminal')
-        if self.num_open_nt < 2 and len(self._buffer) > 0:
+        if self._num_open_nt < 2 and len(self._buffer) > 0:
             raise IllegalActionError(
                 'cannot REDUCE because there are words not SHIFT-ed yet')
 

@@ -136,7 +136,6 @@ class TestDiscRNNGrammar:
         assert len(parser.stack_buffer) == 0
         assert len(parser.input_buffer) == 0
         assert len(parser.action_history) == 0
-        assert parser.num_open_nt == 0
         assert not parser.finished
 
     def test_start(self):
@@ -151,7 +150,6 @@ class TestDiscRNNGrammar:
         assert len(parser.stack_buffer) == 0
         assert parser.input_buffer == words
         assert len(parser.action_history) == 0
-        assert parser.num_open_nt == 0
         assert not parser.finished
 
     def test_do_nt_action(self):
@@ -173,7 +171,6 @@ class TestDiscRNNGrammar:
         assert parser.input_buffer == prev_input_buffer
         assert len(parser.action_history) == 1
         assert parser.action_history[-1] == self.action2id['NT(S)']
-        assert parser.num_open_nt == 1
         assert not parser.finished
 
     def test_do_shift_action(self):
@@ -185,7 +182,6 @@ class TestDiscRNNGrammar:
         parser.start(list(zip(words, pos_tags)))
         parser.push_nt(self.nt2id['S'])
         parser.push_nt(self.nt2id['NP'])
-        prev_num_open_nt = parser.num_open_nt
 
         parser.shift()
 
@@ -195,7 +191,6 @@ class TestDiscRNNGrammar:
         assert parser.input_buffer == words[1:]
         assert len(parser.action_history) == 3
         assert parser.action_history[-1] == self.action2id['SHIFT']
-        assert parser.num_open_nt == prev_num_open_nt
         assert not parser.finished
 
     def test_do_reduce_action(self):
@@ -209,7 +204,6 @@ class TestDiscRNNGrammar:
         parser.push_nt(self.nt2id['NP'])
         parser.shift()
         prev_input_buffer = parser.input_buffer
-        prev_num_open_nt = parser.num_open_nt
 
         parser.reduce()
 
@@ -222,7 +216,6 @@ class TestDiscRNNGrammar:
         assert parser.input_buffer == prev_input_buffer
         assert len(parser.action_history) == 4
         assert parser.action_history[-1] == self.action2id['REDUCE']
-        assert parser.num_open_nt == prev_num_open_nt - 1
         assert not parser.finished
 
     def test_forward(self):
