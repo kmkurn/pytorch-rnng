@@ -155,6 +155,11 @@ class DiscRNNGrammar(RNNGrammar):
         self.hidden_dim = hidden_dim
         self.num_layers = num_layers
         self.dropout = dropout
+        self._reduce_action = None
+        for a in range(num_actions):
+            if a not in non_reduce:
+                self._reduce_action = a
+        assert self._reduce_action is not None
 
         # Parser states
         self._stack = []  # type: List[StackElement]
@@ -296,19 +301,10 @@ class DiscRNNGrammar(RNNGrammar):
 
     def reduce(self) -> None:
         self._verify_reduce()
-        non_reduce = {self.shift_action}
-        non_reduce.update(self.action2nt)
-        reduce_action = None
-        for action in range(self.num_actions):
-            if action not in non_reduce:
-                reduce_action = action
-                break
-
-        assert reduce_action is not None
         self._reduce()
-        assert reduce_action in self._action_emb
-        self._history.append(reduce_action)
-        self.history_lstm.push(self._action_emb[reduce_action])
+        assert self._reduce_action in self._action_emb
+        self._history.append(self._reduce_action)
+        self.history_lstm.push(self._action_emb[self._reduce_action])
 
     def forward(self):
         if not self._started:
