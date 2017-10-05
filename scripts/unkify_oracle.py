@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python -O
 
 from argparse import ArgumentParser
 from collections import Counter
