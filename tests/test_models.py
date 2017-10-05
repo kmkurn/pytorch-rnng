@@ -278,6 +278,8 @@ class TestDiscRNNGrammar:
         parse_tree = parser.stack_buffer[-1]
         assert str(parse_tree) == str(exp_parse_tree)
         with pytest.raises(RuntimeError):
+            parser()
+        with pytest.raises(RuntimeError):
             parser.push_nt(self.nt2id['NP'])
         with pytest.raises(RuntimeError):
             parser.shift()
