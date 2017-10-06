@@ -2,7 +2,8 @@ from nltk.tree import Tree
 import pytest
 
 from rnng.actions import ShiftAction, ReduceAction, NTAction, GenAction
-from rnng.oracle import DiscOracle, GenOracle
+from rnng.oracle import DiscOracle, GenOracle, OracleDataset
+from rnng.utils import ItemStore
 
 
 class TestDiscOracle:
@@ -92,7 +93,6 @@ class TestGenOracle:
             GenOracle.from_string(s)
 
 
-@pytest.mark.skip(reason='Changes in utils module')
 class TestOracleDataset:
     bracketed_sents = [
         '(S (NP (NNP John)) (VP (VBZ loves) (NP (NNP Mary))))',
@@ -101,8 +101,7 @@ class TestOracleDataset:
     words = {'John', 'loves', 'hates', 'Mary'}
     pos_tags = {'NNP', 'VBZ'}
     nt_labels = {'S', 'NP', 'VP'}
-    actions = {str(NTAction('S')), str(NTAction('NP')), str(NTAction('VP')),
-               str(ShiftAction()), str(ReduceAction())}
+    actions = {NTAction('S'), NTAction('NP'), NTAction('VP'), ShiftAction(), ReduceAction()}
 
     def test_init(self):
         oracles = [DiscOracle.from_parsed_sent(Tree.fromstring(s))
@@ -110,24 +109,28 @@ class TestOracleDataset:
 
         dataset = OracleDataset(oracles)
 
-        assert isinstance(dataset.word_store, TermStore)
-        assert set(dataset.word_store) == self.words
-        assert isinstance(dataset.pos_store, TermStore)
-        assert set(dataset.pos_store) == self.pos_tags
-        assert isinstance(dataset.nt_store, TermStore)
-        assert set(dataset.nt_store) == self.nt_labels
-        assert isinstance(dataset.action_store, TermStore)
-        assert set(dataset.action_store) == self.actions
-        assert len(dataset.nt2action) == len(self.nt_labels)
-        for label in self.nt_labels:
-            nt_id = dataset.nt_store.get_id(label)
-            action_id = dataset.nt2action[nt_id]
-            assert action_id == dataset.action_store.get_id(str(NTAction(label)))
+        assert isinstance(dataset.word2id, ItemStore)
+        assert set(dataset.word2id) == self.words
+        assert isinstance(dataset.pos2id, ItemStore)
+        assert set(dataset.pos2id) == self.pos_tags
+        assert isinstance(dataset.nt2id, ItemStore)
+        assert set(dataset.nt2id) == self.nt_labels
+        assert isinstance(dataset.action2id, ItemStore)
+        assert set(dataset.action2id) == self.actions
 
     def test_getitem(self):
         oracles = [DiscOracle.from_parsed_sent(Tree.fromstring(s))
                    for s in self.bracketed_sents]
+
         dataset = OracleDataset(oracles)
 
         assert oracles[0] is dataset[0]
         assert oracles[1] is dataset[1]
+
+    def test_len(self):
+        oracles = [DiscOracle.from_parsed_sent(Tree.fromstring(s))
+                   for s in self.bracketed_sents]
+
+        dataset = OracleDataset(oracles)
+
+        assert len(dataset) == len(oracles)
