@@ -13,16 +13,27 @@ class Action(metaclass=abc.ABCMeta):
     def from_string(cls, line: str):
         pass
 
+    @abc.abstractmethod
+    def __eq__(self, other) -> bool:
+        pass
+
+    @abc.abstractmethod
+    def __hash__(self) -> int:
+        pass
+
     def __repr__(self) -> str:
         return str(self)
-
-    def __hash__(self) -> int:
-        return hash(str(self))
 
 
 class ShiftAction(Action):
     def __str__(self) -> str:
         return 'SHIFT'
+
+    def __eq__(self, other) -> bool:
+        return isinstance(other, self.__class__)
+
+    def __hash__(self) -> int:
+        return hash(str(self))
 
     @classmethod
     def from_string(cls, line: str) -> 'ShiftAction':
@@ -35,6 +46,12 @@ class ShiftAction(Action):
 class ReduceAction(Action):
     def __str__(self) -> str:
         return 'REDUCE'
+
+    def __eq__(self, other) -> bool:
+        return isinstance(other, self.__class__)
+
+    def __hash__(self) -> int:
+        return hash(str(self))
 
     @classmethod
     def from_string(cls, line: str) -> 'ReduceAction':
@@ -51,6 +68,12 @@ class NTAction(Action):
     def __str__(self) -> str:
         return f'NT({self.label})'
 
+    def __eq__(self, other) -> bool:
+        return isinstance(other, self.__class__) and self.label == other.label  # type: ignore
+
+    def __hash__(self) -> int:
+        return hash(str(self))
+
     @classmethod
     def from_string(cls, line: str) -> 'NTAction':
         if not line.startswith('NT(') or not line.endswith(')'):
@@ -66,6 +89,12 @@ class GenAction(Action):
 
     def __str__(self) -> str:
         return f'GEN({self.word})'
+
+    def __eq__(self, other) -> bool:
+        return isinstance(other, self.__class__) and self.word == other.word  # type: ignore
+
+    def __hash__(self) -> int:
+        return hash(str(self))
 
     @classmethod
     def from_string(cls, line: str) -> 'GenAction':

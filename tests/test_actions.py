@@ -14,6 +14,10 @@ class TestShiftAction:
         a = ShiftAction()
         assert hash(a) == hash(self.as_str)
 
+    def test_eq(self):
+        assert ShiftAction() == ShiftAction()
+        assert ShiftAction() != ReduceAction()
+
     def test_from_string(self):
         a = ShiftAction.from_string(self.as_str)
         assert isinstance(a, ShiftAction)
@@ -33,6 +37,10 @@ class TestReduceAction:
     def test_hash(self):
         a = ReduceAction()
         assert hash(a) == hash(self.as_str)
+
+    def test_eq(self):
+        assert ReduceAction() == ReduceAction()
+        assert ReduceAction() != ShiftAction()
 
     def test_from_string(self):
         a = ReduceAction.from_string(self.as_str)
@@ -55,6 +63,12 @@ class TestNTAction:
         label = 'NP'
         a = NTAction(label)
         assert hash(a) == hash(self.as_str.format(label=label))
+
+    def test_eq(self):
+        a = NTAction('NP')
+        assert a == NTAction(a.label)
+        assert a != NTAction('asdf')
+        assert a != ShiftAction()
 
     def test_from_string(self):
         label = 'NP'
@@ -79,6 +93,12 @@ class TestGenAction:
         word = 'asdf'
         a = GenAction(word)
         assert hash(a) == hash(self.as_str.format(word=word))
+
+    def test_eq(self):
+        a = GenAction('asdf')
+        assert a == GenAction(a.word)
+        assert a != GenAction('fdsa')
+        assert a != ReduceAction()
 
     def test_from_string(self):
         word = 'asdf'
