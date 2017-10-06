@@ -1,11 +1,13 @@
 import abc
 from typing import List, Sequence
+from typing import Type  # noqa
 
 from nltk.tree import Tree
 from torch.utils.data import Dataset
 
 from rnng.actions import Action, ShiftAction, ReduceAction, NTAction, GenAction
 from rnng.typing import POSTag, Word
+from rnng.typing import NTLabel  # noqa
 from rnng.utils import ItemStore
 
 
@@ -208,10 +210,10 @@ class GenOracle(Oracle):
 class OracleDataset(Dataset):
     def __init__(self, oracles: Sequence[Oracle]) -> None:
         self.oracles = oracles
-        self.word2id = ItemStore()
-        self.pos2id = ItemStore()
-        self.nt2id = ItemStore()
-        self.action2id = ItemStore()
+        self.word2id = ItemStore()  # type: ItemStore[Word]
+        self.pos2id = ItemStore()  # type: ItemStore[POSTag]
+        self.nt2id = ItemStore()  # type: ItemStore[NTLabel]
+        self.action2id = ItemStore()  # type: ItemStore[Action]
 
         self.load()
 

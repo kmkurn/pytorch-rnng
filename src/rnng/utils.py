@@ -1,31 +1,34 @@
-from collections import abc
-from typing import Iterator, Mapping, Union
+from typing import Iterator, Mapping, TypeVar, Union
+from typing import Dict, List  # noqa
 
 from nltk.tree import Tree
 from rnng.typing import NTId, NTLabel, Word, WordId
 
 
-class ItemStore(abc.Mapping):
-    def __init__(self):
-        self._item2id = {}
-        self._id2item = []
+T = TypeVar('T')
 
-    def __getitem__(self, item) -> int:
+
+class ItemStore(Mapping[T, int]):
+    def __init__(self):
+        self._item2id = {}  # type: Dict[T, int]
+        self._id2item = []  # type: List[T]
+
+    def __getitem__(self, item: T) -> int:
         return self._item2id[item]
 
-    def __iter__(self) -> Iterator[str]:
+    def __iter__(self) -> Iterator[T]:
         return iter(self._id2item)
 
     def __len__(self) -> int:
         return len(self._id2item)
 
-    def add(self, item) -> None:
+    def add(self, item: T) -> None:
         if item not in self._item2id:
             self._item2id[item] = len(self._id2item)
             self._id2item.append(item)
         assert len(self._item2id) == len(self._id2item)
 
-    def get_by_id(self, ix: int) -> str:
+    def get_by_id(self, ix: int) -> T:
         return self._id2item[ix]
 
 

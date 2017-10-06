@@ -1,6 +1,6 @@
 import abc
 from collections import OrderedDict
-from typing import Collection, List, Mapping, NamedTuple, Sequence, Sized, Tuple, Union
+from typing import Collection, List, Mapping, NamedTuple, Sequence, Sized, Tuple, Union, cast
 from typing import Dict  # noqa
 
 from nltk.tree import Tree
@@ -90,7 +90,7 @@ def log_softmax(inputs: Variable, restrictions=None) -> Variable:
 
 
 class StackElement(NamedTuple):
-    subtree: Union[WordId, Tree]
+    subtree: Union[Word, Tree]
     emb: Variable
     is_open_nt: bool
 
@@ -189,8 +189,8 @@ class DiscRNNGrammar(RNNGrammar):
 
         # Parser states
         self._stack = []  # type: List[StackElement]
-        self._buffer = []  # type: List[WordId]
-        self._history = []  # type: List[ActionId]
+        self._buffer = []  # type: List[Word]
+        self._history = []  # type: List[Action]
         self._num_open_nt = 0
         self._started = False
 
@@ -404,9 +404,10 @@ class DiscRNNGrammar(RNNGrammar):
         child_subtrees, child_embs = zip(*children)
         open_nt = self._stack.pop()
         assert isinstance(open_nt.subtree, Tree)
-        open_nt.subtree.extend(child_subtrees)
+        parent_subtree = cast(Tree, open_nt.subtree)
+        parent_subtree.extend(child_subtrees)
         composed_emb = self._compose(open_nt.emb, child_embs)
-        self._stack.append(StackElement(open_nt.subtree, composed_emb, False))
+        self._stack.append(StackElement(parent_subtree, composed_emb, False))
         self._num_open_nt -= 1
         assert self._num_open_nt >= 0
 
