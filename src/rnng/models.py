@@ -319,9 +319,13 @@ class DiscRNNGrammar(RNNGrammar):
     def shift(self) -> None:
         self._verify_shift()
         self._shift()
-        assert self.shift_action in self._action_emb
-        self._history.append(self.shift_action)
-        self.history_lstm.push(self._action_emb[self.shift_action])
+        action = ShiftAction()
+        self._history.append(action)
+        assert action in self.action2id
+        aid = self.action2id[action]
+        assert isinstance(self._action_emb, Variable)
+        assert 0 <= aid < self._action_emb.size(0)
+        self.history_lstm.push(self._action_emb[aid])
 
     def reduce(self) -> None:
         self._verify_reduce()
@@ -380,9 +384,11 @@ class DiscRNNGrammar(RNNGrammar):
         assert len(self.buffer_lstm) > 0
         word = self._buffer.pop()
         self.buffer_lstm.pop()
-        assert word in self._word_emb
-        self._stack.append(StackElement(word, self._word_emb[word], False))
-        self.stack_lstm.push(self._word_emb[word])
+        assert word in self.word2id
+        wid = self.word2id[word]
+        assert wid in self._word_emb
+        self._stack.append(StackElement(word, self._word_emb[wid], False))
+        self.stack_lstm.push(self._word_emb[wid])
 
     def _reduce(self) -> None:
         children = []
