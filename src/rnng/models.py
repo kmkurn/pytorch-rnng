@@ -10,7 +10,8 @@ import torch.nn.functional as F
 import torch.nn.init as init
 from torch.autograd import Variable
 
-from rnng.typing import WordId, POSId, NTId, ActionId
+from rnng.actions import Action
+from rnng.typing import Word, POSTag, NTLabel, WordId, POSId, NTId, ActionId
 
 
 class EmptyStackError(Exception):
@@ -133,32 +134,34 @@ class RNNGrammar(nn.Module, metaclass=abc.ABCMeta):
 class DiscRNNGrammar(RNNGrammar):
     MAX_OPEN_NT = 100
 
-    def __init__(self, num_words: int, num_pos: int, num_nt: int, num_actions: int,
-                 shift_action: ActionId, nt2action: Mapping[NTId, ActionId],
+    def __init__(self, word2id: Mapping[Word, WordId], pos2id: Mapping[POSTag, POSId],
+                 nt2id: Mapping[NTLabel, NTId], action2id: Mapping[Action, ActionId],
                  word_dim: int = 32, pos_dim: int = 12, nt_dim: int = 60, action_dim: int = 16,
                  input_dim: int = 128, hidden_dim: int = 128, num_layers: int = 2,
                  dropout: float = 0.) -> None:
-        if shift_action < 0 or shift_action >= num_actions:
-            raise ValueError('SHIFT action ID is out of range')
-        for nonterm, action in nt2action.items():
-            if action < 0 or action >= num_actions:
-                raise ValueError('Some action ID in action2nt mapping is out of range')
-            if nonterm < 0 or nonterm >= num_nt:
-                raise ValueError('Some nonterminal ID in action2nt mapping is out of range')
-        if shift_action in nt2action.values():
-            raise ValueError('SHIFT action cannot also be NT(X) action')
-        non_reduce = {shift_action}
-        non_reduce.update(nt2action.values())
-        if len(non_reduce) + 1 != num_actions:
-            raise ValueError('Cannot have more than one REDUCE action IDs')
+        num_words = len(word2id)
+        num_pos = len(pos2id)
+        num_nt = len(nt2id)
+        num_actions = len(action2id)
+
+        for wid in word2id.values():
+            if wid < 0 or wid >= num_words:
+                raise ValueError(f'word ID of {wid} is out of range')
+        for pid in pos2id.values():
+            if pid < 0 or pid >= num_pos:
+                raise ValueError(f'POS tag ID of {pid} is out of range')
+        for nid in nt2id.values():
+            if nid < 0 or nid >= num_nt:
+                raise ValueError(f'Nonterminal ID of {nid} is out of range')
+        for aid in action2id.values():
+            if aid < 0 or aid >= num_actions:
+                raise ValueError(f'Action ID of {aid} is out of range')
 
         super().__init__()
         self.num_words = num_words
         self.num_pos = num_pos
         self.num_nt = num_nt
         self.num_actions = num_actions
-        self.shift_action = shift_action
-        self.nt2action = nt2action
         self.word_dim = word_dim
         self.pos_dim = pos_dim
         self.nt_dim = nt_dim
@@ -167,11 +170,6 @@ class DiscRNNGrammar(RNNGrammar):
         self.hidden_dim = hidden_dim
         self.num_layers = num_layers
         self.dropout = dropout
-        self.reduce_action = None
-        for a in range(num_actions):
-            if a not in non_reduce:
-                self.reduce_action = a
-        assert self.reduce_action is not None
 
         # Parser states
         self._stack = []  # type: List[StackElement]
@@ -251,6 +249,10 @@ class DiscRNNGrammar(RNNGrammar):
         return (len(self._stack) == 1
                 and not self._stack[0].is_open_nt
                 and len(self._buffer) == 0)
+
+    @property
+    def started(self) -> bool:
+        return self._started
 
     def start(self, tagged_words: Sequence[Tuple[WordId, POSId]]) -> None:
         if len(tagged_words) == 0:
