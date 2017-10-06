@@ -359,6 +359,16 @@ class TestDiscRNNGrammar:
         with pytest.raises(IllegalActionError):
             parser.reduce()
 
+    def test_do_action_when_not_started(self):
+        parser = DiscRNNGrammar(self.word2id, self.pos2id, self.nt2id, self.action2id)
+
+        with pytest.raises(RuntimeError):
+            parser.push_nt('S')
+        with pytest.raises(RuntimeError):
+            parser.shift()
+        with pytest.raises(RuntimeError):
+            parser.reduce()
+
     @pytest.mark.skip(reason='API change')
     def test_forward(self):
         words = [self.word2id[w] for w in ['John', 'loves', 'Mary']]
@@ -430,16 +440,3 @@ class TestDiscRNNGrammar:
 
         with pytest.raises(RuntimeError):
             parser()
-
-    @pytest.mark.skip(reason='API change')
-    def test_do_action_when_not_started(self):
-        parser = DiscRNNGrammar(
-            len(self.word2id), len(self.pos2id), len(self.nt2id), len(self.action2id),
-            self.action2id['SHIFT'], self.nt2action)
-
-        with pytest.raises(RuntimeError):
-            parser.push_nt(self.nt2id['S'])
-        with pytest.raises(RuntimeError):
-            parser.shift()
-        with pytest.raises(RuntimeError):
-            parser.reduce()
