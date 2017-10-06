@@ -1,35 +1,32 @@
-from typing import Collection, Iterator, Mapping, Union
+from collections import abc
+from typing import Iterator, Mapping, Union
 
 from nltk.tree import Tree
 from rnng.typing import NTId, NTLabel, Word, WordId
 
 
-class TermStore(Collection[str]):
+class ItemStore(abc.Mapping):
     def __init__(self):
-        self._term2id = {}
-        self._id2term = {}
+        self._item2id = {}
+        self._id2item = []
 
-    def __contains__(self, term) -> bool:
-        return term in self._term2id
+    def __getitem__(self, item) -> int:
+        return self._item2id[item]
 
     def __iter__(self) -> Iterator[str]:
-        return iter(self._term2id)
+        return iter(self._id2item)
 
     def __len__(self) -> int:
-        return len(self._term2id)
+        return len(self._id2item)
 
-    def add(self, term: str) -> None:
-        if term not in self:
-            size = len(self)
-            self._term2id[term] = size
-            self._id2term[size] = term
-        assert len(self._term2id) == len(self._id2term)
+    def add(self, item) -> None:
+        if item not in self._item2id:
+            self._item2id[item] = len(self._id2item)
+            self._id2item.append(item)
+        assert len(self._item2id) == len(self._id2item)
 
-    def get_id(self, term: str) -> int:
-        return self._term2id[term]
-
-    def get_term(self, ix: int) -> str:
-        return self._id2term[ix]
+    def get_by_id(self, ix: int) -> str:
+        return self._id2item[ix]
 
 
 class ParseTreeMapper:

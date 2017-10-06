@@ -1,50 +1,50 @@
 from nltk.tree import Tree
 
-from rnng.utils import TermStore, ParseTreeMapper, MeanAggregate
+from rnng.utils import ItemStore, ParseTreeMapper, MeanAggregate
 
 
-class TestTermStore:
+class TestItemStore:
     def test_contains(self):
-        tc = TermStore()
+        store = ItemStore()
         for c in list('aabbcc'):
-            tc.add(c)
+            store.add(c)
 
-        assert 'a' in tc
-        assert 'b' in tc
-        assert 'c' in tc
-        assert 'd' not in tc
+        assert 'a' in store
+        assert 'b' in store
+        assert 'c' in store
+        assert 'd' not in store
 
     def test_iter(self):
-        tc = TermStore()
+        store = ItemStore()
         for c in list('aabbcc'):
-            tc.add(c)
+            store.add(c)
 
-        assert sorted(list('abc')) == sorted(tc)
+        assert sorted(list('abc')) == sorted(store)
 
     def test_len(self):
-        tc = TermStore()
+        store = ItemStore()
         for c in list('aabbcc'):
-            tc.add(c)
+            store.add(c)
 
-        assert len(tc) == 3
+        assert len(store) == 3
 
     def test_unique_ids(self):
-        tc = TermStore()
+        store = ItemStore()
         for c in list('aabbcc'):
-            tc.add(c)
+            store.add(c)
 
-        ids = [tc.get_id(c) for c in list('abc')]
+        ids = [store[c] for c in list('abc')]
         assert len(ids) == len(set(ids))
         for i in ids:
-            assert 0 <= i < len(tc)
+            assert 0 <= i < len(store)
 
     def test_invertible(self):
-        tc = TermStore()
+        store = ItemStore()
         for c in list('aabbcc'):
-            tc.add(c)
+            store.add(c)
 
         for c in list('abc'):
-            assert tc.get_term(tc.get_id(c)) == c
+            assert store.get_by_id(store[c]) == c
 
 
 class TestParseTreeMapper:

@@ -8,7 +8,7 @@ from torch.utils.data import Dataset
 from rnng.actions import Action, ShiftAction, ReduceAction, NTAction, GenAction
 from rnng.typing import POSTag, Word
 from rnng.typing import ActionId, NTId  # noqa
-from rnng.utils import TermStore
+# from rnng.utils import TermStore
 
 
 class Oracle(metaclass=abc.ABCMeta):
@@ -207,34 +207,34 @@ class GenOracle(Oracle):
                 f"'{line}' is not a valid string for any generative parser action")
 
 
-class OracleDataset(Dataset):
-    def __init__(self, oracles: Sequence[Oracle]) -> None:
-        self.oracles = oracles
-        self.word_store = TermStore()
-        self.pos_store = TermStore()
-        self.nt_store = TermStore()
-        self.action_store = TermStore()
-        self.nt2action = {}  # type: Dict[NTId, ActionId]
+# class OracleDataset(Dataset):
+#     def __init__(self, oracles: Sequence[Oracle]) -> None:
+#         self.oracles = oracles
+#         self.word_store = TermStore()
+#         self.pos_store = TermStore()
+#         self.nt_store = TermStore()
+#         self.action_store = TermStore()
+#         self.nt2action = {}  # type: Dict[NTId, ActionId]
 
-        self.load()
+#         self.load()
 
-    def load(self) -> None:
-        for oracle in self.oracles:
-            for word in oracle.words:
-                self.word_store.add(word)
-            for pos in oracle.pos_tags:
-                self.pos_store.add(pos)
-            for action in oracle.actions:
-                a_str = str(action)
-                self.action_store.add(a_str)
-                if isinstance(action, NTAction):
-                    self.nt_store.add(action.label)
-                    nid = self.nt_store.get_id(action.label)
-                    aid = self.action_store.get_id(a_str)
-                    self.nt2action[nid] = aid
+#     def load(self) -> None:
+#         for oracle in self.oracles:
+#             for word in oracle.words:
+#                 self.word_store.add(word)
+#             for pos in oracle.pos_tags:
+#                 self.pos_store.add(pos)
+#             for action in oracle.actions:
+#                 a_str = str(action)
+#                 self.action_store.add(a_str)
+#                 if isinstance(action, NTAction):
+#                     self.nt_store.add(action.label)
+#                     nid = self.nt_store.get_id(action.label)
+#                     aid = self.action_store.get_id(a_str)
+#                     self.nt2action[nid] = aid
 
-    def __getitem__(self, index: int) -> Oracle:
-        return self.oracles[index]
+#     def __getitem__(self, index: int) -> Oracle:
+#         return self.oracles[index]
 
-    def __len__(self) -> int:
-        return len(self.oracles)
+#     def __len__(self) -> int:
+#         return len(self.oracles)
