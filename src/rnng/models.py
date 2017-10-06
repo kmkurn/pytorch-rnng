@@ -10,7 +10,7 @@ import torch.nn.functional as F
 import torch.nn.init as init
 from torch.autograd import Variable
 
-from rnng.actions import Action, NTAction
+from rnng.actions import Action, ShiftAction, ReduceAction, NTAction
 from rnng.typing import Word, POSTag, NTLabel, WordId, POSId, NTId, ActionId
 
 
@@ -139,6 +139,11 @@ class DiscRNNGrammar(RNNGrammar):
                  word_dim: int = 32, pos_dim: int = 12, nt_dim: int = 60, action_dim: int = 16,
                  input_dim: int = 128, hidden_dim: int = 128, num_layers: int = 2,
                  dropout: float = 0.) -> None:
+        if ShiftAction() not in action2id:
+            raise ValueError('SHIFT action ID must be specified')
+        if ReduceAction() not in action2id:
+            raise ValueError('REDUCE action ID must be specified')
+
         num_words = len(word2id)
         num_pos = len(pos2id)
         num_nt = len(nt2id)

@@ -139,6 +139,20 @@ class TestDiscRNNGrammar:
         assert not parser.finished
         assert not parser.started
 
+    def test_init_no_shift_action(self):
+        action2id = {NTAction('S'): 0, NTAction('NP'): 1, NTAction('VP'): 2,
+                     ReduceAction(): 3}
+
+        with pytest.raises(ValueError):
+            DiscRNNGrammar(self.word2id, self.pos2id, self.nt2id, action2id)
+
+    def test_init_no_reduce_action(self):
+        action2id = {NTAction('S'): 0, NTAction('NP'): 1, NTAction('VP'): 2,
+                     ShiftAction(): 3}
+
+        with pytest.raises(ValueError):
+            DiscRNNGrammar(self.word2id, self.pos2id, self.nt2id, action2id)
+
     def test_init_word_id_out_of_range(self):
         word2id = dict(self.word2id)
 
