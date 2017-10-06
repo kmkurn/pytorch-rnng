@@ -2,7 +2,7 @@ from typing import List, Tuple
 
 from torch.autograd import Variable
 
-from rnng.actions import Action, ShiftAction, ReduceAction, NTAction, GenAction
+from rnng.actions import Action
 from rnng.models import RNNGrammar
 
 
@@ -15,14 +15,5 @@ def greedy_decode(parser: RNNGrammar) -> List[Tuple[Action, Variable]]:
         best_logprob = best_logprob[0]
         best_action = parser.action_store.get_by_id(best_action_id)
         result.append((best_action, best_logprob))
-        if isinstance(best_action, ShiftAction):
-            parser.shift()
-        elif isinstance(best_action, ReduceAction):
-            parser.reduce()
-        elif isinstance(best_action, NTAction):
-            parser.push_nt(best_action.label)
-        elif isinstance(best_action, GenAction):
-            raise NotImplementedError('generative RNNG is not implemented yet')
-        else:
-            raise TypeError(f"unknown action type '{type(best_action)}'")
+        best_action.execute_on(parser)
     return result
