@@ -11,9 +11,7 @@ from rnng.typing import ActionId, NTId  # noqa
 from rnng.utils import TermStore
 
 
-class Oracle:
-    __metaclass__ = abc.ABCMeta
-
+class Oracle(metaclass=abc.ABCMeta):
     @property
     @abc.abstractmethod
     def actions(self) -> List[Action]:
