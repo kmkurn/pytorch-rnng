@@ -109,14 +109,14 @@ class TestOracleDataset:
 
         dataset = OracleDataset(oracles)
 
-        assert isinstance(dataset.word2id, ItemStore)
-        assert set(dataset.word2id) == self.words
-        assert isinstance(dataset.pos2id, ItemStore)
-        assert set(dataset.pos2id) == self.pos_tags
-        assert isinstance(dataset.nt2id, ItemStore)
-        assert set(dataset.nt2id) == self.nt_labels
-        assert isinstance(dataset.action2id, ItemStore)
-        assert set(dataset.action2id) == self.actions
+        assert isinstance(dataset.word_store, ItemStore)
+        assert set(dataset.word_store) == self.words
+        assert isinstance(dataset.pos_store, ItemStore)
+        assert set(dataset.pos_store) == self.pos_tags
+        assert isinstance(dataset.nt_store, ItemStore)
+        assert set(dataset.nt_store) == self.nt_labels
+        assert isinstance(dataset.action_store, ItemStore)
+        assert set(dataset.action_store) == self.actions
 
     def test_getitem(self):
         oracles = [DiscOracle.from_parsed_sent(Tree.fromstring(s))

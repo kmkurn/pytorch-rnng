@@ -210,23 +210,23 @@ class GenOracle(Oracle):
 class OracleDataset(Dataset):
     def __init__(self, oracles: Sequence[Oracle]) -> None:
         self.oracles = oracles
-        self.word2id = ItemStore()  # type: ItemStore[Word]
-        self.pos2id = ItemStore()  # type: ItemStore[POSTag]
-        self.nt2id = ItemStore()  # type: ItemStore[NTLabel]
-        self.action2id = ItemStore()  # type: ItemStore[Action]
+        self.word_store = ItemStore()  # type: ItemStore[Word]
+        self.pos_store = ItemStore()  # type: ItemStore[POSTag]
+        self.nt_store = ItemStore()  # type: ItemStore[NTLabel]
+        self.action_store = ItemStore()  # type: ItemStore[Action]
 
         self.load()
 
     def load(self) -> None:
         for oracle in self.oracles:
             for word in oracle.words:
-                self.word2id.add(word)
+                self.word_store.add(word)
             for pos in oracle.pos_tags:
-                self.pos2id.add(pos)
+                self.pos_store.add(pos)
             for action in oracle.actions:
-                self.action2id.add(action)
+                self.action_store.add(action)
                 if isinstance(action, NTAction):
-                    self.nt2id.add(action.label)
+                    self.nt_store.add(action.label)
 
     def __getitem__(self, index: int) -> Oracle:
         return self.oracles[index]
