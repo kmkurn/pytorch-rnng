@@ -124,11 +124,19 @@ class RNNGrammar(nn.Module, metaclass=abc.ABCMeta):
         pass
 
     @abc.abstractmethod
+    def push_nt(self, nonterm: NTLabel) -> None:
+        pass
+
+    @abc.abstractmethod
     def reduce(self) -> None:
         pass
 
     @abc.abstractmethod
-    def push_nt(self, nonterm: NTLabel) -> None:
+    def verify_push_nt(self) -> None:
+        pass
+
+    @abc.abstractmethod
+    def verify_reduce(self) -> None:
         pass
 
 
@@ -312,17 +320,17 @@ class DiscRNNGrammar(RNNGrammar):
         if action not in self.action2id:
             raise KeyError(f"unknown action '{action}' encountered")
 
-        self._verify_nt()
+        self.verify_push_nt()
         self._push_nt(nonterm)
         self._append_history(action)
 
     def shift(self) -> None:
-        self._verify_shift()
+        self.verify_shift()
         self._shift()
         self._append_history(ShiftAction())
 
     def reduce(self) -> None:
-        self._verify_reduce()
+        self.verify_reduce()
         self._reduce()
         self._append_history(ReduceAction())
 
@@ -443,14 +451,8 @@ class DiscRNNGrammar(RNNGrammar):
 
     def _is_legal(self, aid: ActionId) -> bool:
         assert aid in self._id2action
-        action = self._id2action[aid]
         try:
-            if isinstance(action, ShiftAction):
-                self._verify_shift()
-            elif isinstance(action, ReduceAction):
-                self._verify_reduce()
-            else:
-                self._verify_nt()
+            self._id2action[aid].verify_legal_on(self)
         except IllegalActionError:
             return False
         else:
@@ -462,21 +464,21 @@ class DiscRNNGrammar(RNNGrammar):
         if self.finished:
             raise RuntimeError('cannot do more action when parser is finished')
 
-    def _verify_nt(self) -> None:
+    def verify_push_nt(self) -> None:
         self._verify_action()
         if len(self._buffer) == 0:
             raise IllegalActionError('cannot do NT(X) when input buffer is empty')
         if self._num_open_nt >= self.MAX_OPEN_NT:
             raise IllegalActionError('max number of open nonterminals is reached')
 
-    def _verify_shift(self) -> None:
+    def verify_shift(self) -> None:
         self._verify_action()
         if len(self._buffer) == 0:
             raise IllegalActionError('cannot SHIFT when input buffer is empty')
         if self._num_open_nt == 0:
             raise IllegalActionError('cannot SHIFT when no open nonterminal exists')
 
-    def _verify_reduce(self) -> None:
+    def verify_reduce(self) -> None:
         self._verify_action()
         last_is_nt = len(self._history) > 0 and isinstance(self._history[-1], NTAction)
         if last_is_nt:

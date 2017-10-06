@@ -21,6 +21,10 @@ class Action(metaclass=abc.ABCMeta):
     def __hash__(self) -> int:
         pass
 
+    @abc.abstractmethod
+    def verify_legal_on(self, parser) -> None:
+        pass
+
     def __repr__(self) -> str:
         return str(self)
 
@@ -34,6 +38,13 @@ class ShiftAction(Action):
 
     def __hash__(self) -> int:
         return hash(str(self))
+
+    def verify_legal_on(self, parser) -> None:
+        from rnng.models import DiscRNNGrammar
+
+        if not isinstance(parser, DiscRNNGrammar):
+            raise TypeError(f'{self} action is not legal for type {type(parser)}')
+        parser.verify_shift()
 
     @classmethod
     def from_string(cls, line: str) -> 'ShiftAction':
@@ -52,6 +63,9 @@ class ReduceAction(Action):
 
     def __hash__(self) -> int:
         return hash(str(self))
+
+    def verify_legal_on(self, parser) -> None:
+        parser.verify_reduce()
 
     @classmethod
     def from_string(cls, line: str) -> 'ReduceAction':
@@ -74,6 +88,9 @@ class NTAction(Action):
     def __hash__(self) -> int:
         return hash(str(self))
 
+    def verify_legal_on(self, parser) -> None:
+        parser.verify_push_nt()
+
     @classmethod
     def from_string(cls, line: str) -> 'NTAction':
         if not line.startswith('NT(') or not line.endswith(')'):
@@ -95,6 +112,9 @@ class GenAction(Action):
 
     def __hash__(self) -> int:
         return hash(str(self))
+
+    def verify_legal_on(self, parser) -> None:
+        raise NotImplementedError('Generative RNNG is not implemented yet')
 
     @classmethod
     def from_string(cls, line: str) -> 'GenAction':
