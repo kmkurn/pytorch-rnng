@@ -318,16 +318,13 @@ class TestDiscRNNGrammar:
         with pytest.raises(IllegalActionError):
             parser.shift()
 
-    @pytest.mark.skip(reason='API change')
     def test_do_reduce_action(self):
-        words = [self.word2id[w] for w in ['John', 'loves', 'Mary']]
-        pos_tags = [self.pos2id[p] for p in ['NNP', 'VBZ', 'NNP']]
-        parser = DiscRNNGrammar(
-            len(self.word2id), len(self.pos2id), len(self.nt2id), len(self.action2id),
-            self.action2id['SHIFT'], self.nt2action)
+        words = ['John', 'loves', 'Mary']
+        pos_tags = ['NNP', 'VBZ', 'NNP']
+        parser = DiscRNNGrammar(self.word2id, self.pos2id, self.nt2id, self.action2id)
         parser.start(list(zip(words, pos_tags)))
-        parser.push_nt(self.nt2id['S'])
-        parser.push_nt(self.nt2id['NP'])
+        parser.push_nt('S')
+        parser.push_nt('NP')
         parser.shift()
         prev_input_buffer = parser.input_buffer
 
@@ -336,13 +333,31 @@ class TestDiscRNNGrammar:
         assert len(parser.stack_buffer) == 2
         last = parser.stack_buffer[-1]
         assert isinstance(last, Tree)
-        assert last.label() == self.nt2id['NP']
+        assert last.label() == 'NP'
         assert len(last) == 1
-        assert last[0] == self.word2id['John']
+        assert last[0] == 'John'
         assert parser.input_buffer == prev_input_buffer
         assert len(parser.action_history) == 4
-        assert parser.action_history[-1] == self.action2id['REDUCE']
+        assert parser.action_history[-1] == ReduceAction()
         assert not parser.finished
+
+    def test_do_illegal_reduce_action(self):
+        words = ['John', 'loves']
+        pos_tags = ['NNP', 'VBZ']
+        parser = DiscRNNGrammar(self.word2id, self.pos2id, self.nt2id, self.action2id)
+
+        # Top of stack is an open nonterminal
+        parser.start(list(zip(words, pos_tags)))
+        parser.push_nt('S')
+        with pytest.raises(IllegalActionError):
+            parser.reduce()
+
+        # Buffer is not empty and REDUCE will finish parsing
+        parser.start(list(zip(words, pos_tags)))
+        parser.push_nt('S')
+        parser.shift()
+        with pytest.raises(IllegalActionError):
+            parser.reduce()
 
     @pytest.mark.skip(reason='API change')
     def test_forward(self):
@@ -427,25 +442,4 @@ class TestDiscRNNGrammar:
         with pytest.raises(RuntimeError):
             parser.shift()
         with pytest.raises(RuntimeError):
-            parser.reduce()
-
-    @pytest.mark.skip(reason='API change')
-    def test_do_illegal_reduce_action(self):
-        words = [self.word2id[w] for w in ['John', 'loves']]
-        pos_tags = [self.pos2id[p] for p in ['NNP', 'VBZ']]
-        parser = DiscRNNGrammar(
-            len(self.word2id), len(self.pos2id), len(self.nt2id), len(self.action2id),
-            self.action2id['SHIFT'], self.nt2action)
-
-        # Top of stack is an open nonterminal
-        parser.start(list(zip(words, pos_tags)))
-        parser.push_nt(self.nt2id['S'])
-        with pytest.raises(IllegalActionError):
-            parser.reduce()
-
-        # Buffer is not empty and REDUCE will finish parsing
-        parser.start(list(zip(words, pos_tags)))
-        parser.push_nt(self.nt2id['S'])
-        parser.shift()
-        with pytest.raises(IllegalActionError):
             parser.reduce()

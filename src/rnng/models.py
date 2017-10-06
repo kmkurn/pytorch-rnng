@@ -330,9 +330,13 @@ class DiscRNNGrammar(RNNGrammar):
     def reduce(self) -> None:
         self._verify_reduce()
         self._reduce()
-        assert self.reduce_action in self._action_emb
-        self._history.append(self.reduce_action)
-        self.history_lstm.push(self._action_emb[self.reduce_action])
+        action = ReduceAction()
+        assert action in self.action2id
+        self._history.append(action)
+        aid = self.action2id[action]
+        assert isinstance(self._action_emb, Variable)
+        assert 0 <= aid < self._action_emb.size(0)
+        self.history_lstm.push(self._action_emb[aid])
 
     def forward(self):
         if not self._started:
@@ -477,7 +481,7 @@ class DiscRNNGrammar(RNNGrammar):
 
     def _verify_reduce(self) -> None:
         self._verify_action()
-        last_is_nt = len(self._history) > 0 and self._history[-1] in self.nt2action.values()
+        last_is_nt = len(self._history) > 0 and isinstance(self._history[-1], NTAction)
         if last_is_nt:
             raise IllegalActionError(
                 'cannot REDUCE when top of stack is an open nonterminal')
