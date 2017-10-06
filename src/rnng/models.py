@@ -314,33 +314,17 @@ class DiscRNNGrammar(RNNGrammar):
 
         self._verify_nt()
         self._push_nt(nonterm)
-        self._history.append(action)
-        aid = self.action2id[action]
-        assert isinstance(self._action_emb, Variable)
-        assert 0 <= aid < self._action_emb.size(0)
-        self.history_lstm.push(self._action_emb[aid])
+        self._append_history(action)
 
     def shift(self) -> None:
         self._verify_shift()
         self._shift()
-        action = ShiftAction()
-        self._history.append(action)
-        assert action in self.action2id
-        aid = self.action2id[action]
-        assert isinstance(self._action_emb, Variable)
-        assert 0 <= aid < self._action_emb.size(0)
-        self.history_lstm.push(self._action_emb[aid])
+        self._append_history(ShiftAction())
 
     def reduce(self) -> None:
         self._verify_reduce()
         self._reduce()
-        action = ReduceAction()
-        assert action in self.action2id
-        self._history.append(action)
-        aid = self.action2id[action]
-        assert isinstance(self._action_emb, Variable)
-        assert 0 <= aid < self._action_emb.size(0)
-        self.history_lstm.push(self._action_emb[aid])
+        self._append_history(ReduceAction())
 
     def forward(self):
         if not self._started:
@@ -386,6 +370,14 @@ class DiscRNNGrammar(RNNGrammar):
         self._word_emb = dict(zip(word_ids, final_word_embs))
         self._nt_emb = final_nt_embs
         self._action_emb = final_action_embs
+
+    def _append_history(self, action: Action) -> None:
+        self._history.append(action)
+        assert action in self.action2id
+        aid = self.action2id[action]
+        assert isinstance(self._action_emb, Variable)
+        assert 0 <= aid < self._action_emb.size(0)
+        self.history_lstm.push(self._action_emb[aid])
 
     def _shift(self) -> None:
         assert len(self._buffer) > 0
