@@ -348,11 +348,11 @@ class DiscRNNGrammar(RNNGrammar):
         assert all(emb is not None for emb in lstm_embs)
         lstms_emb = torch.cat(lstm_embs).view(1, -1)
         parser_summary = self.lstms2summary(lstms_emb)
-        illegal_actions = self._get_illegal_actions()
-        if illegal_actions.dim() == 0:
-            illegal_actions = None
+        illegal_action_ids = self._get_illegal_action_ids()
+        if illegal_action_ids.dim() == 0:
+            illegal_action_ids = None
         return log_softmax(self.summary2actions(parser_summary),
-                           restrictions=illegal_actions).view(-1)
+                           restrictions=illegal_action_ids).view(-1)
 
     def _prepare_embeddings(self, words: Collection[Word], pos_tags: Collection[POSTag]):
         assert len(words) == len(pos_tags)
@@ -442,17 +442,24 @@ class DiscRNNGrammar(RNNGrammar):
         bwd_emb = F.dropout(bwd_output[-1, 0], p=self.dropout, training=self.training)
         return self.fwdbwd2composed(torch.cat([fwd_emb, bwd_emb]).view(1, -1)).view(-1)
 
-    def _get_illegal_actions(self):
-        illegal_actions = [action for action in range(self.num_actions)
-                           if self._is_legal(action)]
-        return self._new(illegal_actions).long()
+    def _get_illegal_action_ids(self):
+        illegal_action_ids = [aid for aid in range(self.num_actions)
+                              if self._is_legal(aid)]
+        return self._new(illegal_action_ids).long()
 
-    def _is_legal(self, action: ActionId) -> bool:
-        assert 0 <= action < self.num_actions
+    def _is_legal(self, aid: ActionId) -> bool:
+        assert 0 <= aid < self.num_actions
+        # TODO precompute inverse dict id2action
+        action = None
+        for action_, aid_ in self.action2id.items():
+            if aid_ == aid:
+                action = action_
+                break
+        assert action is not None
         try:
-            if action == self.shift_action:
+            if isinstance(action, ShiftAction):
                 self._verify_shift()
-            elif action == self.reduce_action:
+            elif isinstance(action, ReduceAction):
                 self._verify_reduce()
             else:
                 self._verify_nt()
