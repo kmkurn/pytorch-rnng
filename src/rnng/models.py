@@ -520,7 +520,7 @@ class DiscRNNGrammar(RNNGrammar):
 
         # Embeddings
         for name in ['word', 'pos', 'nt', 'action']:
-            layer = getattr(self, f'{name}_emb')
+            layer = getattr(self, f'{name}_embs')
             init.uniform(layer.weight, -0.01, 0.01)
 
         # Guards
