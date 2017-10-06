@@ -1,7 +1,7 @@
 from nltk.tree import Tree
 import pytest
 
-from rnng.actions import ShiftAction, ReduceAction, NTAction
+from rnng.actions import ShiftAction, ReduceAction, NTAction, GenAction
 from rnng.oracle import DiscOracle, GenOracle, OracleDataset
 from rnng.utils import TermStore
 
@@ -9,15 +9,26 @@ from rnng.utils import TermStore
 class TestDiscOracle:
     def test_from_parsed_sent(self):
         s = '(S (NP (NNP John)) (VP (VBZ loves) (NP (NNP Mary))))'
-        expected_actions = ['NT(S)', 'NT(NP)', 'SHIFT', 'REDUCE', 'NT(VP)', 'SHIFT', 'NT(NP)',
-                            'SHIFT', 'REDUCE', 'REDUCE', 'REDUCE']
+        expected_actions = [
+            NTAction('S'),
+            NTAction('NP'),
+            ShiftAction(),
+            ReduceAction(),
+            NTAction('VP'),
+            ShiftAction(),
+            NTAction('NP'),
+            ShiftAction(),
+            ReduceAction(),
+            ReduceAction(),
+            ReduceAction(),
+        ]
         expected_pos_tags = ['NNP', 'VBZ', 'NNP']
         expected_words = ['John', 'loves', 'Mary']
 
         oracle = DiscOracle.from_parsed_sent(Tree.fromstring(s))
 
         assert isinstance(oracle, DiscOracle)
-        assert [str(a) for a in oracle.actions] == expected_actions
+        assert oracle.actions == expected_actions
         assert oracle.pos_tags == expected_pos_tags
         assert oracle.words == expected_words
 
@@ -29,7 +40,7 @@ class TestDiscOracle:
         assert isinstance(oracle, DiscOracle)
         assert oracle.words == ['asdf', 'fdsa']
         assert oracle.pos_tags == ['NNP', 'VBZ']
-        assert [str(a) for a in oracle.actions] == ['NT(S)', 'SHIFT', 'SHIFT', 'REDUCE']
+        assert oracle.actions == [NTAction('S'), ShiftAction(), ShiftAction(), ReduceAction()]
 
     def test_from_string_too_short(self):
         s = 'asdf asdf\nNT(S)\nSHIFT\nSHIFT\nREDUCE'
@@ -41,15 +52,26 @@ class TestDiscOracle:
 class TestGenOracle:
     def test_from_parsed_sent(self):
         s = '(S (NP (NNP John)) (VP (VBZ loves) (NP (NNP Mary))))'
-        expected_actions = ['NT(S)', 'NT(NP)', 'GEN(John)', 'REDUCE', 'NT(VP)', 'GEN(loves)',
-                            'NT(NP)', 'GEN(Mary)', 'REDUCE', 'REDUCE', 'REDUCE']
+        expected_actions = [
+            NTAction('S'),
+            NTAction('NP'),
+            GenAction('John'),
+            ReduceAction(),
+            NTAction('VP'),
+            GenAction('loves'),
+            NTAction('NP'),
+            GenAction('Mary'),
+            ReduceAction(),
+            ReduceAction(),
+            ReduceAction()
+        ]
         expected_words = ['John', 'loves', 'Mary']
         expected_pos_tags = ['NNP', 'VBZ', 'NNP']
 
         oracle = GenOracle.from_parsed_sent(Tree.fromstring(s))
 
         assert isinstance(oracle, GenOracle)
-        assert [str(a) for a in oracle.actions] == expected_actions
+        assert oracle.actions == expected_actions
         assert oracle.words == expected_words
         assert oracle.pos_tags == expected_pos_tags
 
@@ -61,8 +83,8 @@ class TestGenOracle:
         assert isinstance(oracle, GenOracle)
         assert oracle.words == ['asdf', 'fdsa']
         assert oracle.pos_tags == ['NNP', 'VBZ']
-        assert [str(a) for a in oracle.actions] == ['NT(S)', 'GEN(asdf)', 'GEN(fdsa)',
-                                                    'REDUCE']
+        assert oracle.actions == [NTAction('S'), GenAction('asdf'), GenAction('fdsa'),
+                                  ReduceAction()]
 
     def test_from_string_too_short(self):
         s = 'NT(S)'
