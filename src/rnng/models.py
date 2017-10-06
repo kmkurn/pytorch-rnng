@@ -101,12 +101,12 @@ class IllegalActionError(Exception):
 class RNNGrammar(nn.Module, metaclass=abc.ABCMeta):
     @property
     @abc.abstractmethod
-    def stack_buffer(self) -> Sequence[Union[Tree, WordId]]:
+    def stack_buffer(self) -> Sequence[Union[Tree, Word]]:
         pass
 
     @property
     @abc.abstractmethod
-    def action_history(self) -> Sequence[ActionId]:
+    def action_history(self) -> Sequence[Action]:
         pass
 
     @property
@@ -115,7 +115,7 @@ class RNNGrammar(nn.Module, metaclass=abc.ABCMeta):
         pass
 
     @abc.abstractmethod
-    def start(self, tagged_words: Sequence[Tuple[WordId, POSId]]) -> None:
+    def start(self, tagged_words: Sequence[Tuple[Word, POSTag]]) -> None:
         pass
 
     @abc.abstractmethod
@@ -127,7 +127,7 @@ class RNNGrammar(nn.Module, metaclass=abc.ABCMeta):
         pass
 
     @abc.abstractmethod
-    def push_nt(self, nonterm: NTId) -> None:
+    def push_nt(self, nonterm: NTLabel) -> None:
         pass
 
 
@@ -245,15 +245,15 @@ class DiscRNNGrammar(RNNGrammar):
         self._action_emb = {}  # type: Variable
 
     @property
-    def stack_buffer(self) -> List[Union[Tree, WordId]]:
+    def stack_buffer(self) -> List[Union[Tree, Word]]:
         return [x.subtree for x in self._stack]
 
     @property
-    def input_buffer(self) -> List[WordId]:
+    def input_buffer(self) -> List[Word]:
         return list(reversed(self._buffer))
 
     @property
-    def action_history(self) -> List[ActionId]:
+    def action_history(self) -> List[Action]:
         return list(self._history)
 
     @property
