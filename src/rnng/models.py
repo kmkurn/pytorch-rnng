@@ -158,6 +158,10 @@ class DiscRNNGrammar(RNNGrammar):
                 raise ValueError(f'Action ID of {aid} is out of range')
 
         super().__init__()
+        self.word2id = word2id
+        self.pos2id = pos2id
+        self.nt2id = nt2id
+        self.action2id = action2id
         self.num_words = num_words
         self.num_pos = num_pos
         self.num_nt = num_nt
@@ -229,8 +233,8 @@ class DiscRNNGrammar(RNNGrammar):
 
         # Final embeddings
         self._word_emb = {}  # type: Dict[WordId, Variable]
-        self._nt_emb = {}  # type: Dict[NTId, Variable]
-        self._action_emb = {}  # type: Dict[ActionId, Variable]
+        self._nt_emb = {}  # type: Variable
+        self._action_emb = {}  # type: Variable
 
     @property
     def stack_buffer(self) -> List[Union[Tree, WordId]]:
@@ -254,14 +258,14 @@ class DiscRNNGrammar(RNNGrammar):
     def started(self) -> bool:
         return self._started
 
-    def start(self, tagged_words: Sequence[Tuple[WordId, POSId]]) -> None:
+    def start(self, tagged_words: Sequence[Tuple[Word, POSTag]]) -> None:
         if len(tagged_words) == 0:
             raise ValueError('parser cannot be started with empty sequence of words')
         for word, pos in tagged_words:
-            if word < 0 or word >= self.num_words:
-                raise ValueError(f'word ID is out of range: {word}')
-            if pos < 0 or pos >= self.num_pos:
-                raise ValueError(f'POS tag ID is out of range: {pos}')
+            if word not in self.word2id:
+                raise ValueError(f"unknown word '{word}' encountered")
+            if pos not in self.pos2id:
+                raise ValueError(f"unknown POS tag '{pos}' encountered")
 
         self._stack = []
         self._buffer = []
@@ -286,8 +290,10 @@ class DiscRNNGrammar(RNNGrammar):
         self._prepare_embeddings(words, pos_tags)
         for word in reversed(words):
             self._buffer.append(word)
-            assert word in self._word_emb
-            self.buffer_lstm.push(self._word_emb[word])
+            assert word in self.word2id
+            wid = self.word2id[word]
+            assert wid in self._word_emb
+            self.buffer_lstm.push(self._word_emb[wid])
         self._started = True
 
     def push_nt(self, nonterm: NTId) -> None:
@@ -330,20 +336,23 @@ class DiscRNNGrammar(RNNGrammar):
         return log_softmax(self.summary2actions(parser_summary),
                            restrictions=illegal_actions).view(-1)
 
-    def _prepare_embeddings(self, words: Collection[WordId], pos_tags: Collection[POSId]):
+    def _prepare_embeddings(self, words: Collection[Word], pos_tags: Collection[POSTag]):
         assert len(words) == len(pos_tags)
-        assert all(0 <= w < self.num_words for w in words)
-        assert all(0 <= p < self.num_pos for p in pos_tags)
+        assert all(w in self.word2id for w in words)
+        assert all(p in self.pos2id for p in pos_tags)
 
-        nonterms = list(self.nt2action.keys())
-        assert all(0 <= n < self.num_nt for n in nonterms)
-        actions = range(self.num_actions)
+        word_ids = [self.word2id[w] for w in words]
+        pos_ids = [self.pos2id[p] for p in pos_tags]
+        assert all(0 <= wid < self.num_words for wid in word_ids)
+        assert all(0 <= pid < self.num_pos for pid in pos_ids)
+        nt_ids = list(range(self.num_nt))
+        action_ids = list(range(self.num_actions))
 
         volatile = not self.training
-        word_indices = Variable(self._new(words).long().view(1, -1), volatile=volatile)
-        pos_indices = Variable(self._new(pos_tags).long().view(1, -1), volatile=volatile)
-        nt_indices = Variable(self._new(nonterms).long().view(1, -1), volatile=volatile)
-        action_indices = Variable(self._new(actions).long().view(1, -1), volatile=volatile)
+        word_indices = Variable(self._new(word_ids).long().view(1, -1), volatile=volatile)
+        pos_indices = Variable(self._new(pos_ids).long().view(1, -1), volatile=volatile)
+        nt_indices = Variable(self._new(nt_ids).long().view(1, -1), volatile=volatile)
+        action_indices = Variable(self._new(action_ids).long().view(1, -1), volatile=volatile)
 
         word_embs = self.word_embs(word_indices).view(-1, self.word_dim)
         pos_embs = self.pos_embs(pos_indices).view(-1, self.pos_dim)
@@ -354,9 +363,9 @@ class DiscRNNGrammar(RNNGrammar):
         final_nt_embs = self.nt2lstm(nt_embs)
         final_action_embs = self.action2lstm(action_embs)
 
-        self._word_emb = dict(zip(words, final_word_embs))
-        self._nt_emb = dict(zip(nonterms, final_nt_embs))
-        self._action_emb = dict(zip(actions, final_action_embs))
+        self._word_emb = dict(zip(word_ids, final_word_embs))
+        self._nt_emb = final_nt_embs
+        self._action_emb = final_action_embs
 
     def _shift(self) -> None:
         assert len(self._buffer) > 0

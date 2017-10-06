@@ -183,13 +183,10 @@ class TestDiscRNNGrammar:
         with pytest.raises(ValueError):
             DiscRNNGrammar(self.word2id, self.pos2id, self.nt2id, action2id)
 
-    @pytest.mark.skip(reason='API change')
     def test_start(self):
-        words = [self.word2id[w] for w in ['John', 'loves', 'Mary']]
-        pos_tags = [self.pos2id[p] for p in ['NNP', 'VBZ', 'NNP']]
-        parser = DiscRNNGrammar(
-            len(self.word2id), len(self.pos2id), len(self.nt2id), len(self.action2id),
-            self.action2id['SHIFT'], self.nt2action)
+        words = ['John', 'loves', 'Mary']
+        pos_tags = ['NNP', 'VBZ', 'NNP']
+        parser = DiscRNNGrammar(self.word2id, self.pos2id, self.nt2id, self.action2id)
 
         parser.start(list(zip(words, pos_tags)))
 
@@ -197,6 +194,22 @@ class TestDiscRNNGrammar:
         assert parser.input_buffer == words
         assert len(parser.action_history) == 0
         assert not parser.finished
+        assert parser.started
+
+    def test_start_with_empty_tagged_words(self):
+        parser = DiscRNNGrammar(self.word2id, self.pos2id, self.nt2id, self.action2id)
+
+        with pytest.raises(ValueError):
+            parser.start([])
+
+    def test_start_with_invalid_word_or_pos(self):
+        parser = DiscRNNGrammar(self.word2id, self.pos2id, self.nt2id, self.action2id)
+
+        with pytest.raises(ValueError):
+            parser.start([('Bob', 'NNP')])
+
+        with pytest.raises(ValueError):
+            parser.start([('John', 'VBD')])
 
     @pytest.mark.skip(reason='API change')
     def test_do_nt_action(self):
@@ -329,27 +342,6 @@ class TestDiscRNNGrammar:
             parser.shift()
         with pytest.raises(RuntimeError):
             parser.reduce()
-
-    @pytest.mark.skip(reason='API change')
-    def test_start_with_empty_tagged_words(self):
-        parser = DiscRNNGrammar(
-            len(self.word2id), len(self.pos2id), len(self.nt2id), len(self.action2id),
-            self.action2id['SHIFT'], self.nt2action)
-
-        with pytest.raises(ValueError):
-            parser.start([])
-
-    @pytest.mark.skip(reason='API change')
-    def test_start_with_invalid_word_or_pos(self):
-        parser = DiscRNNGrammar(
-            len(self.word2id), len(self.pos2id), len(self.nt2id), len(self.action2id),
-            self.action2id['SHIFT'], self.nt2action)
-
-        with pytest.raises(ValueError):
-            parser.start([(len(self.word2id), self.pos2id['NNP'])])
-
-        with pytest.raises(ValueError):
-            parser.start([(self.word2id['John'], len(self.pos2id))])
 
     @pytest.mark.skip(reason='API change')
     def test_forward_when_not_started(self):
