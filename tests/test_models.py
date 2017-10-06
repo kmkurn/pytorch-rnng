@@ -6,6 +6,7 @@ from torch.autograd import Variable
 from rnng.actions import ShiftAction, ReduceAction, NTAction
 from rnng.models import (DiscRNNGrammar, EmptyStackError, StackLSTM, log_softmax,
                          IllegalActionError)
+from rnng.utils import ItemStore
 
 
 class MockLSTM:
@@ -126,11 +127,13 @@ class TestDiscRNNGrammar:
     word2id = {'John': 0, 'loves': 1, 'Mary': 2}
     pos2id = {'NNP': 0, 'VBZ': 1}
     nt2id = {'S': 2, 'NP': 1, 'VP': 0}
-    action2id = {NTAction('S'): 0, NTAction('NP'): 1, NTAction('VP'): 2,
-                 ShiftAction(): 3, ReduceAction(): 4}
+    action_store = ItemStore()
+    actions = [NTAction('S'), NTAction('NP'), NTAction('VP'), ShiftAction(), ReduceAction()]
+    for a in actions:
+        action_store.add(a)
 
     def test_init(self):
-        parser = DiscRNNGrammar(self.word2id, self.pos2id, self.nt2id, self.action2id)
+        parser = DiscRNNGrammar(self.word2id, self.pos2id, self.nt2id, self.action_store)
 
         assert len(parser.stack_buffer) == 0
         assert len(parser.input_buffer) == 0
@@ -139,74 +142,60 @@ class TestDiscRNNGrammar:
         assert not parser.started
 
     def test_init_no_shift_action(self):
-        action2id = {NTAction('S'): 0, NTAction('NP'): 1, NTAction('VP'): 2,
-                     ReduceAction(): 3}
+        action_store = ItemStore()
+        actions = [NTAction('S'), NTAction('NP'), NTAction('VP'), ReduceAction()]
+        for a in actions:
+            action_store.add(a)
 
         with pytest.raises(ValueError):
-            DiscRNNGrammar(self.word2id, self.pos2id, self.nt2id, action2id)
+            DiscRNNGrammar(self.word2id, self.pos2id, self.nt2id, action_store)
 
     def test_init_no_reduce_action(self):
-        action2id = {NTAction('S'): 0, NTAction('NP'): 1, NTAction('VP'): 2,
-                     ShiftAction(): 3}
+        action_store = ItemStore()
+        actions = [NTAction('S'), NTAction('NP'), NTAction('VP'), ShiftAction()]
+        for a in actions:
+            action_store.add(a)
 
         with pytest.raises(ValueError):
-            DiscRNNGrammar(self.word2id, self.pos2id, self.nt2id, action2id)
+            DiscRNNGrammar(self.word2id, self.pos2id, self.nt2id, action_store)
 
     def test_init_word_id_out_of_range(self):
         word2id = dict(self.word2id)
 
         word2id['John'] = len(word2id)
         with pytest.raises(ValueError):
-            DiscRNNGrammar(word2id, self.pos2id, self.nt2id, self.action2id)
+            DiscRNNGrammar(word2id, self.pos2id, self.nt2id, self.action_store)
 
         word2id['John'] = -1
         with pytest.raises(ValueError):
-            DiscRNNGrammar(word2id, self.pos2id, self.nt2id, self.action2id)
+            DiscRNNGrammar(word2id, self.pos2id, self.nt2id, self.action_store)
 
     def test_init_pos_id_out_of_range(self):
         pos2id = dict(self.pos2id)
 
         pos2id['NNP'] = len(pos2id)
         with pytest.raises(ValueError):
-            DiscRNNGrammar(self.word2id, pos2id, self.nt2id, self.action2id)
+            DiscRNNGrammar(self.word2id, pos2id, self.nt2id, self.action_store)
 
         pos2id['NNP'] = -1
         with pytest.raises(ValueError):
-            DiscRNNGrammar(self.word2id, pos2id, self.nt2id, self.action2id)
+            DiscRNNGrammar(self.word2id, pos2id, self.nt2id, self.action_store)
 
     def test_init_nt_id_out_of_range(self):
         nt2id = dict(self.nt2id)
 
         nt2id['S'] = len(nt2id)
         with pytest.raises(ValueError):
-            DiscRNNGrammar(self.word2id, self.pos2id, nt2id, self.action2id)
+            DiscRNNGrammar(self.word2id, self.pos2id, nt2id, self.action_store)
 
         nt2id['S'] = -1
         with pytest.raises(ValueError):
-            DiscRNNGrammar(self.word2id, self.pos2id, nt2id, self.action2id)
-
-    def test_init_action_id_out_of_range(self):
-        action2id = dict(self.action2id)
-
-        action2id[ShiftAction()] = len(action2id)
-        with pytest.raises(ValueError):
-            DiscRNNGrammar(self.word2id, self.pos2id, self.nt2id, action2id)
-
-        action2id[ShiftAction()] = -1
-        with pytest.raises(ValueError):
-            DiscRNNGrammar(self.word2id, self.pos2id, self.nt2id, action2id)
-
-    def test_init_action_id_not_unique(self):
-        action2id = dict(self.action2id)
-        action2id[ShiftAction()] = action2id[ReduceAction()]
-
-        with pytest.raises(ValueError):
-            DiscRNNGrammar(self.word2id, self.pos2id, self.nt2id, action2id)
+            DiscRNNGrammar(self.word2id, self.pos2id, nt2id, self.action_store)
 
     def test_start(self):
         words = ['John', 'loves', 'Mary']
         pos_tags = ['NNP', 'VBZ', 'NNP']
-        parser = DiscRNNGrammar(self.word2id, self.pos2id, self.nt2id, self.action2id)
+        parser = DiscRNNGrammar(self.word2id, self.pos2id, self.nt2id, self.action_store)
 
         parser.start(list(zip(words, pos_tags)))
 
@@ -217,13 +206,13 @@ class TestDiscRNNGrammar:
         assert parser.started
 
     def test_start_with_empty_tagged_words(self):
-        parser = DiscRNNGrammar(self.word2id, self.pos2id, self.nt2id, self.action2id)
+        parser = DiscRNNGrammar(self.word2id, self.pos2id, self.nt2id, self.action_store)
 
         with pytest.raises(ValueError):
             parser.start([])
 
     def test_start_with_invalid_word_or_pos(self):
-        parser = DiscRNNGrammar(self.word2id, self.pos2id, self.nt2id, self.action2id)
+        parser = DiscRNNGrammar(self.word2id, self.pos2id, self.nt2id, self.action_store)
 
         with pytest.raises(ValueError):
             parser.start([('Bob', 'NNP')])
@@ -234,7 +223,7 @@ class TestDiscRNNGrammar:
     def test_do_nt_action(self):
         words = ['John', 'loves', 'Mary']
         pos_tags = ['NNP', 'VBZ', 'NNP']
-        parser = DiscRNNGrammar(self.word2id, self.pos2id, self.nt2id, self.action2id)
+        parser = DiscRNNGrammar(self.word2id, self.pos2id, self.nt2id, self.action_store)
         parser.start(list(zip(words, pos_tags)))
         prev_input_buffer = parser.input_buffer
 
@@ -253,7 +242,7 @@ class TestDiscRNNGrammar:
     def test_do_illegal_push_nt_action(self):
         words = ['John']
         pos_tags = ['NNP']
-        parser = DiscRNNGrammar(self.word2id, self.pos2id, self.nt2id, self.action2id)
+        parser = DiscRNNGrammar(self.word2id, self.pos2id, self.nt2id, self.action_store)
 
         # Buffer is empty
         parser.start(list(zip(words, pos_tags)))
@@ -272,18 +261,20 @@ class TestDiscRNNGrammar:
     def test_push_unknown_nt(self):
         words = ['John']
         pos_tags = ['NNP']
-        parser = DiscRNNGrammar(self.word2id, self.pos2id, self.nt2id, self.action2id)
+        parser = DiscRNNGrammar(self.word2id, self.pos2id, self.nt2id, self.action_store)
         parser.start(list(zip(words, pos_tags)))
 
         with pytest.raises(KeyError):
             parser.push_nt('asdf')
 
     def test_push_known_nt_but_unknown_action(self):
-        action2id = {NTAction('NP'): 0, NTAction('VP'): 1,
-                     ShiftAction(): 2, ReduceAction(): 3}
+        actions = [NTAction('NP'), NTAction('VP'), ShiftAction(), ReduceAction()]
+        action_store = ItemStore()
+        for a in actions:
+            action_store.add(a)
         words = ['John']
         pos_tags = ['NNP']
-        parser = DiscRNNGrammar(self.word2id, self.pos2id, self.nt2id, action2id)
+        parser = DiscRNNGrammar(self.word2id, self.pos2id, self.nt2id, action_store)
         parser.start(list(zip(words, pos_tags)))
 
         with pytest.raises(KeyError):
@@ -292,7 +283,7 @@ class TestDiscRNNGrammar:
     def test_do_shift_action(self):
         words = ['John', 'loves', 'Mary']
         pos_tags = ['NNP', 'VBZ', 'NNP']
-        parser = DiscRNNGrammar(self.word2id, self.pos2id, self.nt2id, self.action2id)
+        parser = DiscRNNGrammar(self.word2id, self.pos2id, self.nt2id, self.action_store)
         parser.start(list(zip(words, pos_tags)))
         parser.push_nt('S')
         parser.push_nt('NP')
@@ -310,7 +301,7 @@ class TestDiscRNNGrammar:
     def test_do_illegal_shift_action(self):
         words = ['John']
         pos_tags = ['NNP']
-        parser = DiscRNNGrammar(self.word2id, self.pos2id, self.nt2id, self.action2id)
+        parser = DiscRNNGrammar(self.word2id, self.pos2id, self.nt2id, self.action_store)
 
         # No open nonterminal
         parser.start(list(zip(words, pos_tags)))
@@ -327,7 +318,7 @@ class TestDiscRNNGrammar:
     def test_do_reduce_action(self):
         words = ['John', 'loves', 'Mary']
         pos_tags = ['NNP', 'VBZ', 'NNP']
-        parser = DiscRNNGrammar(self.word2id, self.pos2id, self.nt2id, self.action2id)
+        parser = DiscRNNGrammar(self.word2id, self.pos2id, self.nt2id, self.action_store)
         parser.start(list(zip(words, pos_tags)))
         parser.push_nt('S')
         parser.push_nt('NP')
@@ -350,7 +341,7 @@ class TestDiscRNNGrammar:
     def test_do_illegal_reduce_action(self):
         words = ['John', 'loves']
         pos_tags = ['NNP', 'VBZ']
-        parser = DiscRNNGrammar(self.word2id, self.pos2id, self.nt2id, self.action2id)
+        parser = DiscRNNGrammar(self.word2id, self.pos2id, self.nt2id, self.action_store)
 
         # Top of stack is an open nonterminal
         parser.start(list(zip(words, pos_tags)))
@@ -366,7 +357,7 @@ class TestDiscRNNGrammar:
             parser.reduce()
 
     def test_do_action_when_not_started(self):
-        parser = DiscRNNGrammar(self.word2id, self.pos2id, self.nt2id, self.action2id)
+        parser = DiscRNNGrammar(self.word2id, self.pos2id, self.nt2id, self.action_store)
 
         with pytest.raises(RuntimeError):
             parser.push_nt('S')
@@ -378,7 +369,7 @@ class TestDiscRNNGrammar:
     def test_forward(self):
         words = ['John', 'loves', 'Mary']
         pos_tags = ['NNP', 'VBZ', 'NNP']
-        parser = DiscRNNGrammar(self.word2id, self.pos2id, self.nt2id, self.action2id)
+        parser = DiscRNNGrammar(self.word2id, self.pos2id, self.nt2id, self.action_store)
         parser.start(list(zip(words, pos_tags)))
         parser.push_nt('S')
         parser.push_nt('NP')
@@ -388,12 +379,12 @@ class TestDiscRNNGrammar:
         action_logprobs = parser()
 
         assert isinstance(action_logprobs, Variable)
-        assert action_logprobs.size() == (len(self.action2id),)
+        assert action_logprobs.size() == (len(self.action_store),)
         sum_prob = action_logprobs.exp().sum().data[0]
         assert 0.999 <= sum_prob <= 1.001
 
     def test_forward_when_not_started(self):
-        parser = DiscRNNGrammar(self.word2id, self.pos2id, self.nt2id, self.action2id)
+        parser = DiscRNNGrammar(self.word2id, self.pos2id, self.nt2id, self.action_store)
 
         with pytest.raises(RuntimeError):
             parser()
@@ -401,7 +392,7 @@ class TestDiscRNNGrammar:
     def test_finished(self):
         words = ['John', 'loves', 'Mary']
         pos_tags = ['NNP', 'VBZ', 'NNP']
-        parser = DiscRNNGrammar(self.word2id, self.pos2id, self.nt2id, self.action2id)
+        parser = DiscRNNGrammar(self.word2id, self.pos2id, self.nt2id, self.action_store)
         exp_parse_tree = Tree('S', [Tree('NP', ['John']),
                                     Tree('VP', ['loves', Tree('NP', ['Mary'])])])
 

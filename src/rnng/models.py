@@ -12,6 +12,7 @@ from torch.autograd import Variable
 
 from rnng.actions import Action, ShiftAction, ReduceAction, NTAction
 from rnng.typing import Word, POSTag, NTLabel, WordId, POSId, NTId, ActionId
+from rnng.utils import ItemStore
 
 
 class EmptyStackError(Exception):
@@ -144,19 +145,19 @@ class DiscRNNGrammar(RNNGrammar):
     MAX_OPEN_NT = 100
 
     def __init__(self, word2id: Mapping[Word, WordId], pos2id: Mapping[POSTag, POSId],
-                 nt2id: Mapping[NTLabel, NTId], action2id: Mapping[Action, ActionId],
+                 nt2id: Mapping[NTLabel, NTId], action_store: ItemStore,
                  word_dim: int = 32, pos_dim: int = 12, nt_dim: int = 60, action_dim: int = 16,
                  input_dim: int = 128, hidden_dim: int = 128, num_layers: int = 2,
                  dropout: float = 0.) -> None:
-        if ShiftAction() not in action2id:
+        if ShiftAction() not in action_store:
             raise ValueError('SHIFT action ID must be specified')
-        if ReduceAction() not in action2id:
+        if ReduceAction() not in action_store:
             raise ValueError('REDUCE action ID must be specified')
 
         num_words = len(word2id)
         num_pos = len(pos2id)
         num_nt = len(nt2id)
-        num_actions = len(action2id)
+        num_actions = len(action_store)
 
         for wid in word2id.values():
             if wid < 0 or wid >= num_words:
@@ -167,17 +168,12 @@ class DiscRNNGrammar(RNNGrammar):
         for nid in nt2id.values():
             if nid < 0 or nid >= num_nt:
                 raise ValueError(f'nonterminal ID of {nid} is out of range')
-        for aid in action2id.values():
-            if aid < 0 or aid >= num_actions:
-                raise ValueError(f'action ID of {aid} is out of range')
-        if len(set(action2id.values())) != num_actions:
-            raise ValueError('duplicate action ID detected')
 
         super().__init__()
         self.word2id = word2id
         self.pos2id = pos2id
         self.nt2id = nt2id
-        self.action2id = action2id
+        self.action_store = action_store
         self.num_words = num_words
         self.num_pos = num_pos
         self.num_nt = num_nt
@@ -190,7 +186,6 @@ class DiscRNNGrammar(RNNGrammar):
         self.hidden_dim = hidden_dim
         self.num_layers = num_layers
         self.dropout = dropout
-        self._id2action = {aid: action for action, aid in action2id.items()}
 
         # Parser states
         self._stack = []  # type: List[StackElement]
@@ -317,7 +312,7 @@ class DiscRNNGrammar(RNNGrammar):
         if nonterm not in self.nt2id:
             raise KeyError(f"unknown nonterminal '{nonterm}' encountered")
         action = NTAction(nonterm)
-        if action not in self.action2id:
+        if action not in self.action_store:
             raise KeyError(f"unknown action '{action}' encountered")
 
         self.verify_push_nt()
@@ -381,8 +376,8 @@ class DiscRNNGrammar(RNNGrammar):
 
     def _append_history(self, action: Action) -> None:
         self._history.append(action)
-        assert action in self.action2id
-        aid = self.action2id[action]
+        assert action in self.action_store
+        aid = self.action_store[action]
         assert isinstance(self._action_emb, Variable)
         assert 0 <= aid < self._action_emb.size(0)
         self.history_lstm.push(self._action_emb[aid])
@@ -450,9 +445,9 @@ class DiscRNNGrammar(RNNGrammar):
         return self._new(illegal_action_ids).long()
 
     def _is_legal(self, aid: ActionId) -> bool:
-        assert aid in self._id2action
+        assert 0 <= aid < len(self.action_store)
         try:
-            self._id2action[aid].verify_legal_on(self)
+            self.action_store.get_by_id(aid).verify_legal_on(self)
         except IllegalActionError:
             return False
         else:
