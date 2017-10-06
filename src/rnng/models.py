@@ -181,6 +181,7 @@ class DiscRNNGrammar(RNNGrammar):
         self.hidden_dim = hidden_dim
         self.num_layers = num_layers
         self.dropout = dropout
+        self._id2action = {aid: action for action, aid in action2id.items()}
 
         # Parser states
         self._stack = []  # type: List[StackElement]
@@ -448,14 +449,8 @@ class DiscRNNGrammar(RNNGrammar):
         return self._new(illegal_action_ids).long()
 
     def _is_legal(self, aid: ActionId) -> bool:
-        assert 0 <= aid < self.num_actions
-        # TODO precompute inverse dict id2action
-        action = None
-        for action_, aid_ in self.action2id.items():
-            if aid_ == aid:
-                action = action_
-                break
-        assert action is not None
+        assert aid in self._id2action
+        action = self._id2action[aid]
         try:
             if isinstance(action, ShiftAction):
                 self._verify_shift()
