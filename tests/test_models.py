@@ -399,32 +399,21 @@ class TestDiscRNNGrammar:
         with pytest.raises(RuntimeError):
             parser()
 
-    @pytest.mark.skip(reason='API change')
     def test_finished(self):
-        words = [self.word2id[w] for w in ['John', 'loves', 'Mary']]
-        pos_tags = [self.pos2id[p] for p in ['NNP', 'VBZ', 'NNP']]
-        parser = DiscRNNGrammar(
-            len(self.word2id), len(self.pos2id), len(self.nt2id), len(self.action2id),
-            self.action2id['SHIFT'], self.nt2action)
-        exp_parse_tree = Tree(self.nt2id['S'], [
-            Tree(self.nt2id['NP'], [
-                self.word2id['John']]),
-            Tree(self.nt2id['VP'], [
-                self.word2id['loves'],
-                Tree(self.nt2id['NP'], [
-                    self.word2id['Mary']
-                ])
-            ])
-        ])
+        words = ['John', 'loves', 'Mary']
+        pos_tags = ['NNP', 'VBZ', 'NNP']
+        parser = DiscRNNGrammar(self.word2id, self.pos2id, self.nt2id, self.action2id)
+        exp_parse_tree = Tree('S', [Tree('NP', ['John']),
+                                    Tree('VP', ['loves', Tree('NP', ['Mary'])])])
 
         parser.start(list(zip(words, pos_tags)))
-        parser.push_nt(self.nt2id['S'])
-        parser.push_nt(self.nt2id['NP'])
+        parser.push_nt('S')
+        parser.push_nt('NP')
         parser.shift()
         parser.reduce()
-        parser.push_nt(self.nt2id['VP'])
+        parser.push_nt('VP')
         parser.shift()
-        parser.push_nt(self.nt2id['NP'])
+        parser.push_nt('NP')
         parser.shift()
         parser.reduce()
         parser.reduce()
@@ -432,11 +421,11 @@ class TestDiscRNNGrammar:
 
         assert parser.finished
         parse_tree = parser.stack_buffer[-1]
-        assert str(parse_tree) == str(exp_parse_tree)
+        assert parse_tree == exp_parse_tree
         with pytest.raises(RuntimeError):
             parser()
         with pytest.raises(RuntimeError):
-            parser.push_nt(self.nt2id['NP'])
+            parser.push_nt('NP')
         with pytest.raises(RuntimeError):
             parser.shift()
         with pytest.raises(RuntimeError):
