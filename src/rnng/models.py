@@ -10,7 +10,7 @@ import torch.nn.functional as F
 import torch.nn.init as init
 from torch.autograd import Variable
 
-from rnng.actions import Action
+from rnng.actions import Action, NTAction
 from rnng.typing import Word, POSTag, NTLabel, WordId, POSId, NTId, ActionId
 
 
@@ -296,17 +296,20 @@ class DiscRNNGrammar(RNNGrammar):
             self.buffer_lstm.push(self._word_emb[wid])
         self._started = True
 
-    def push_nt(self, nonterm: NTId) -> None:
+    def push_nt(self, nonterm: NTLabel) -> None:
+        if nonterm not in self.nt2id:
+            raise KeyError(f"unknown nonterminal '{nonterm}' encountered")
+        action = NTAction(nonterm)
+        if action not in self.action2id:
+            raise KeyError(f"unknown action '{action}' encountered")
+
         self._verify_nt()
-        try:
-            action = self.nt2action[nonterm]
-        except KeyError:
-            raise KeyError(f'unknown nonterminal ID: {nonterm}')
-        else:
-            self._push_nt(nonterm)
-            assert action in self._action_emb
-            self._history.append(action)
-            self.history_lstm.push(self._action_emb[action])
+        self._push_nt(nonterm)
+        self._history.append(action)
+        aid = self.action2id[action]
+        assert isinstance(self._action_emb, Variable)
+        assert 0 <= aid < self._action_emb.size(0)
+        self.history_lstm.push(self._action_emb[aid])
 
     def shift(self) -> None:
         self._verify_shift()
@@ -393,11 +396,13 @@ class DiscRNNGrammar(RNNGrammar):
         self._num_open_nt -= 1
         assert self._num_open_nt >= 0
 
-    def _push_nt(self, nonterm: NTId) -> None:
-        assert nonterm in self._nt_emb
+    def _push_nt(self, nonterm: NTLabel) -> None:
+        nid = self.nt2id[nonterm]
+        assert isinstance(self._nt_emb, Variable)
+        assert 0 <= nid < self._nt_emb.size(0)
         self._stack.append(
-            StackElement(Tree(nonterm, []), self._nt_emb[nonterm], True))
-        self.stack_lstm.push(self._nt_emb[nonterm])
+            StackElement(Tree(nonterm, []), self._nt_emb[nid], True))
+        self.stack_lstm.push(self._nt_emb[nid])
         self._num_open_nt += 1
 
     def _compose(self, open_nt_emb: Variable, children_embs: Sequence[Variable]) -> Variable:

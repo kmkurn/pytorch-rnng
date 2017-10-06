@@ -211,27 +211,64 @@ class TestDiscRNNGrammar:
         with pytest.raises(ValueError):
             parser.start([('John', 'VBD')])
 
-    @pytest.mark.skip(reason='API change')
     def test_do_nt_action(self):
-        words = [self.word2id[w] for w in ['John', 'loves', 'Mary']]
-        pos_tags = [self.pos2id[p] for p in ['NNP', 'VBZ', 'NNP']]
-        parser = DiscRNNGrammar(
-            len(self.word2id), len(self.pos2id), len(self.nt2id), len(self.action2id),
-            self.action2id['SHIFT'], self.nt2action)
+        words = ['John', 'loves', 'Mary']
+        pos_tags = ['NNP', 'VBZ', 'NNP']
+        parser = DiscRNNGrammar(self.word2id, self.pos2id, self.nt2id, self.action2id)
         parser.start(list(zip(words, pos_tags)))
         prev_input_buffer = parser.input_buffer
 
-        parser.push_nt(self.nt2id['S'])
+        parser.push_nt('S')
 
         assert len(parser.stack_buffer) == 1
         last = parser.stack_buffer[-1]
         assert isinstance(last, Tree)
-        assert last.label() == self.nt2id['S']
+        assert last.label() == 'S'
         assert len(last) == 0
         assert parser.input_buffer == prev_input_buffer
         assert len(parser.action_history) == 1
-        assert parser.action_history[-1] == self.action2id['NT(S)']
+        assert parser.action_history[-1] == NTAction('S')
         assert not parser.finished
+
+    @pytest.mark.skip(reason='Need to test SHIFT first')
+    def test_do_illegal_push_nt_action(self):
+        words = ['John']
+        pos_tags = ['NNP']
+        parser = DiscRNNGrammar(self.word2id, self.pos2id, self.nt2id, self.action2id)
+
+        # Buffer is empty
+        parser.start(list(zip(words, pos_tags)))
+        parser.push_nt('S')
+        parser.shift()
+        with pytest.raises(IllegalActionError):
+            parser.push_nt('NP')
+
+        # More than 100 open nonterminals
+        parser.start(list(zip(words, pos_tags)))
+        for i in range(100):
+            parser.push_nt('S')
+        with pytest.raises(IllegalActionError):
+            parser.push_nt('NP')
+
+    def test_push_unknown_nt(self):
+        words = ['John']
+        pos_tags = ['NNP']
+        parser = DiscRNNGrammar(self.word2id, self.pos2id, self.nt2id, self.action2id)
+        parser.start(list(zip(words, pos_tags)))
+
+        with pytest.raises(KeyError):
+            parser.push_nt('asdf')
+
+    def test_push_known_nt_but_unknown_action(self):
+        action2id = {NTAction('NP'): 0, NTAction('VP'): 1,
+                     ShiftAction(): 2, ReduceAction(): 3}
+        words = ['John']
+        pos_tags = ['NNP']
+        parser = DiscRNNGrammar(self.word2id, self.pos2id, self.nt2id, action2id)
+        parser.start(list(zip(words, pos_tags)))
+
+        with pytest.raises(KeyError):
+            parser.push_nt('S')
 
     @pytest.mark.skip(reason='API change')
     def test_do_shift_action(self):
@@ -364,40 +401,6 @@ class TestDiscRNNGrammar:
             parser.shift()
         with pytest.raises(RuntimeError):
             parser.reduce()
-
-    @pytest.mark.skip(reason='API change')
-    def test_do_illegal_push_nt_action(self):
-        words = [self.word2id[w] for w in ['John']]
-        pos_tags = [self.pos2id[p] for p in ['NNP']]
-        parser = DiscRNNGrammar(
-            len(self.word2id), len(self.pos2id), len(self.nt2id), len(self.action2id),
-            self.action2id['SHIFT'], self.nt2action)
-
-        # Buffer is empty
-        parser.start(list(zip(words, pos_tags)))
-        parser.push_nt(self.nt2id['S'])
-        parser.shift()
-        with pytest.raises(IllegalActionError):
-            parser.push_nt(self.nt2id['NP'])
-
-        # More than 100 open nonterminals
-        parser.start(list(zip(words, pos_tags)))
-        for i in range(100):
-            parser.push_nt(self.nt2id['S'])
-        with pytest.raises(IllegalActionError):
-            parser.push_nt(self.nt2id['NP'])
-
-    @pytest.mark.skip(reason='API change')
-    def test_push_unknown_nt(self):
-        words = [self.word2id[w] for w in ['John']]
-        pos_tags = [self.pos2id[p] for p in ['NNP']]
-        parser = DiscRNNGrammar(
-            len(self.word2id), len(self.pos2id), len(self.nt2id), len(self.action2id),
-            self.action2id['SHIFT'], self.nt2action)
-        parser.start(list(zip(words, pos_tags)))
-
-        with pytest.raises(KeyError):
-            parser.push_nt(len(self.nt2id))
 
     @pytest.mark.skip(reason='API change')
     def test_do_illegal_shift_action(self):
