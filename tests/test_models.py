@@ -128,7 +128,6 @@ class TestDiscRNNGrammar:
     nt2id = {'S': 2, 'NP': 1, 'VP': 0}
     action2id = {NTAction('S'): 0, NTAction('NP'): 1, NTAction('VP'): 2,
                  ShiftAction(): 3, ReduceAction(): 4}
-    nt2action = {2: 0, 1: 1, 0: 2}
 
     def test_init(self):
         parser = DiscRNNGrammar(self.word2id, self.pos2id, self.nt2id, self.action2id)
