@@ -157,10 +157,12 @@ class DiscRNNGrammar(RNNGrammar):
                 raise ValueError(f'POS tag ID of {pid} is out of range')
         for nid in nt2id.values():
             if nid < 0 or nid >= num_nt:
-                raise ValueError(f'Nonterminal ID of {nid} is out of range')
+                raise ValueError(f'nonterminal ID of {nid} is out of range')
         for aid in action2id.values():
             if aid < 0 or aid >= num_actions:
-                raise ValueError(f'Action ID of {aid} is out of range')
+                raise ValueError(f'action ID of {aid} is out of range')
+        if len(set(action2id.values())) != num_actions:
+            raise ValueError('duplicate action ID detected')
 
         super().__init__()
         self.word2id = word2id

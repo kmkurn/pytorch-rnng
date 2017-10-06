@@ -197,6 +197,13 @@ class TestDiscRNNGrammar:
         with pytest.raises(ValueError):
             DiscRNNGrammar(self.word2id, self.pos2id, self.nt2id, action2id)
 
+    def test_init_action_id_not_unique(self):
+        action2id = dict(self.action2id)
+        action2id[ShiftAction()] = action2id[ReduceAction()]
+
+        with pytest.raises(ValueError):
+            DiscRNNGrammar(self.word2id, self.pos2id, self.nt2id, action2id)
+
     def test_start(self):
         words = ['John', 'loves', 'Mary']
         pos_tags = ['NNP', 'VBZ', 'NNP']
