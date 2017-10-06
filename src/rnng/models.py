@@ -114,12 +114,13 @@ class RNNGrammar(nn.Module, metaclass=abc.ABCMeta):
     def finished(self) -> bool:
         pass
 
+    @property
     @abc.abstractmethod
-    def start(self, tagged_words: Sequence[Tuple[Word, POSTag]]) -> None:
+    def started(self) -> bool:
         pass
 
     @abc.abstractmethod
-    def shift(self) -> None:
+    def start(self, tagged_words: Sequence[Tuple[Word, POSTag]]) -> None:
         pass
 
     @abc.abstractmethod
