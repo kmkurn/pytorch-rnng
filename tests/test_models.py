@@ -244,7 +244,6 @@ class TestDiscRNNGrammar:
         assert parser.action_history[-1] == NTAction('S')
         assert not parser.finished
 
-    @pytest.mark.skip(reason='Need to test SHIFT first')
     def test_do_illegal_push_nt_action(self):
         words = ['John']
         pos_tags = ['NNP']
