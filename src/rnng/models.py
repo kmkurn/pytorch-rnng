@@ -442,7 +442,7 @@ class DiscRNNGrammar(RNNGrammar):
 
     def _get_illegal_action_ids(self):
         illegal_action_ids = [aid for aid in range(self.num_actions)
-                              if self._is_legal(aid)]
+                              if not self._is_legal(aid)]
         return self._new(illegal_action_ids).long()
 
     def _is_legal(self, aid: ActionId) -> bool:

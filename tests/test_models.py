@@ -383,6 +383,20 @@ class TestDiscRNNGrammar:
         sum_prob = action_logprobs.exp().sum().data[0]
         assert 0.999 <= sum_prob <= 1.001
 
+    def test_forward_with_illegal_actions(self):
+        words = ['John', 'loves', 'Mary']
+        pos_tags = ['NNP', 'VBZ', 'NNP']
+        parser = DiscRNNGrammar(self.word2id, self.pos2id, self.nt2id, self.action_store)
+        parser.start(list(zip(words, pos_tags)))
+
+        action_probs = parser().exp().data
+
+        assert action_probs[self.action_store[NTAction('S')]] > 0.
+        assert action_probs[self.action_store[NTAction('NP')]] > 0.
+        assert action_probs[self.action_store[NTAction('VP')]] > 0.
+        assert -0.001 <= action_probs[self.action_store[ShiftAction()]] <= 0.001
+        assert -0.001 <= action_probs[self.action_store[ReduceAction()]] <= 0.001
+
     def test_forward_when_not_started(self):
         parser = DiscRNNGrammar(self.word2id, self.pos2id, self.nt2id, self.action_store)
 
