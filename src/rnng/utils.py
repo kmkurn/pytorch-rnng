@@ -71,5 +71,5 @@ class MeanAggregate:
         self.count = 0.
 
     def update(self, val: float, size: int = 1):
-        self.total += val * size
+        self.total += val
         self.count += size

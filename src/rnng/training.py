@@ -10,7 +10,22 @@ from torch.optim import Optimizer
 from torch.utils.data import DataLoader
 
 from rnng.models import RNNGrammar
+from rnng.oracle import Oracle
 from rnng.utils import MeanAggregate
+
+
+def run_batch(parser: RNNGrammar, oracle: Oracle) -> Tuple[Variable, Variable]:
+    parser.start(list(zip(oracle.words, oracle.pos_tags)))
+    log_probs = []
+    for action in oracle.actions:
+        log_probs.append(parser().view(1, -1))
+        action.execute_on(parser)
+    outputs = torch.cat(log_probs)
+    action_ids = [parser.action_store[a] for a in oracle.actions]
+    targets = Variable(outputs.data.new(action_ids).long(), volatile=not parser.training)
+    batch_loss = F.nll_loss(outputs, targets)
+    batch_ppl = batch_loss.exp()
+    return batch_loss, batch_ppl
 
 
 def train(loader: DataLoader, parser: RNNGrammar, optimizer: Optimizer,
@@ -22,17 +37,10 @@ def train(loader: DataLoader, parser: RNNGrammar, optimizer: Optimizer,
     speed = MeanAggregate()
     parser.train()
 
-    for k, (words, pos_tags, actions) in enumerate(loader):
+    start_time = time.time()
+    for k, oracle in enumerate(loader):
         batch_start_time = time.time()
-        parser.start(zip(words, pos_tags))
-        log_probs = []
-        for action in actions:
-            log_probs.append(parser().view(1, -1))
-            parser.do_action(action)
-        outputs = torch.cat(log_probs)
-        targets = Variable(outputs.data.new(actions).long())
-        batch_loss = F.nll_loss(outputs, targets)
-        batch_ppl = batch_loss.exp()
+        batch_loss, batch_ppl = run_batch(parser, oracle)
         optimizer.zero_grad()
         batch_loss.backward()
         clip_grad_norm(parser.parameters(), grad_clip)
@@ -46,11 +54,16 @@ def train(loader: DataLoader, parser: RNNGrammar, optimizer: Optimizer,
 
         if (k + 1) % log_interval == 0:
             print(f'Epoch {epoch_num} [{k+1}/{len(loader)}]:', end=' ', file=sys.stderr)
-            print(f'action nll {loss.mean:.4f} | action ppl {ppl.mean:.4f}', end=' | ',
+            print(f'nll per action {loss.mean:.4f} | ppl per action {ppl.mean:.4f}', end=' | ',
                   file=sys.stderr)
             print(f'{runtime.mean*1000:.2f}ms | {speed.mean:.2f} samples/s', file=sys.stderr)
+            loss.reset()
+            runtime.reset()
+            ppl.reset()
+            speed.reset()
+    epoch_runtime = time.time() - start_time
 
-    print(f'Epoch {epoch_num} done in {runtime.total:.2f}s', file=sys.stderr)
+    print(f'Epoch {epoch_num} done in {epoch_runtime:.2f}s', file=sys.stderr)
     return loss.mean, ppl.mean
 
 
@@ -58,16 +71,8 @@ def evaluate(loader: DataLoader, parser: RNNGrammar) -> Tuple[float, float]:
     parser.eval()
     loss = MeanAggregate()
     ppl = MeanAggregate()
-    for words, pos_tags, actions in loader:
-        parser.start(zip(words, pos_tags))
-        log_probs = []
-        for action in actions:
-            log_probs.append(parser().view(1, -1))
-            parser.do_action(action)
-        outputs = torch.cat(log_probs)
-        targets = Variable(outputs.data.new(actions).long(), volatile=True)
-        batch_loss = F.nll_loss(outputs, targets)
-        batch_ppl = batch_loss.exp()
+    for oracle in loader:
+        batch_loss, batch_ppl = run_batch(parser, oracle)
         loss.update(batch_loss.data[0])
         ppl.update(batch_ppl.data[0])
     return loss.mean, ppl.mean
