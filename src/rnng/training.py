@@ -35,6 +35,8 @@ def train(loader: DataLoader, parser: RNNGrammar, optimizer: Optimizer,
     runtime = MeanAggregate()
     ppl = MeanAggregate()
     speed = MeanAggregate()
+    epoch_loss = MeanAggregate()
+    epoch_ppl = MeanAggregate()
     parser.train()
 
     start_time = time.time()
@@ -51,6 +53,8 @@ def train(loader: DataLoader, parser: RNNGrammar, optimizer: Optimizer,
         runtime.update(batch_runtime)
         ppl.update(batch_ppl.data[0])
         speed.update(loader.batch_size / batch_runtime)
+        epoch_loss.update(batch_loss.data[0])
+        epoch_ppl.update(batch_ppl.data[0])
 
         if (k + 1) % log_interval == 0:
             print(f'Epoch {epoch_num} [{k+1}/{len(loader)}]:', end=' ', file=sys.stderr)
@@ -64,7 +68,7 @@ def train(loader: DataLoader, parser: RNNGrammar, optimizer: Optimizer,
     epoch_runtime = time.time() - start_time
 
     print(f'Epoch {epoch_num} done in {epoch_runtime:.2f}s', file=sys.stderr)
-    return loss.mean, ppl.mean
+    return epoch_loss.mean, epoch_ppl.mean
 
 
 def evaluate(loader: DataLoader, parser: RNNGrammar) -> Tuple[float, float]:
