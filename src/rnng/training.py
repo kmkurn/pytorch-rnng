@@ -1,7 +1,7 @@
+from datetime import timedelta
 import math
 import sys
 import time
-from typing import List, Tuple
 
 import torch
 from torch.autograd import Variable
@@ -29,7 +29,7 @@ def run_batch(parser: RNNGrammar, oracle: Oracle) -> Variable:
 
 def train(loader: DataLoader, parser: RNNGrammar, optimizer: Optimizer,
           log_interval: int = 100, epoch_num: int = 1,
-          grad_clip: float = 5.):
+          grad_clip: float = 5.) -> None:
     parser.train()
     loss = MeanAggregate()
     runtime = MeanAggregate()
@@ -71,3 +71,44 @@ def evaluate(loader: DataLoader, parser: RNNGrammar) -> float:
         batch_loss = run_batch(parser, oracle)
         loss.update(batch_loss.data[0])
     return loss.mean
+
+
+def train_early_stopping(train_loader: DataLoader, dev_loader: DataLoader, parser: RNNGrammar,
+                         optimizer: Optimizer, tol: float = 1e-4, patience: int = 20,
+                         eval_interval: int = 1, on_ppl: bool = True, save_to: str = None,
+                         **kwargs) -> None:
+    if patience <= 0:
+        raise ValueError('patience must be positive')
+    if 'epoch_num' in kwargs:
+        kwargs.pop('epoch_num')
+
+    print('** Start training with early stopping', file=sys.stderr)
+    start_time = time.time()
+    counter = epoch_num = 0
+    loss = evaluate(train_loader, parser)
+    print(f'Epoch {epoch_num}:', end=' ', file=sys.stderr)
+    print(f'nll-per-action {loss:.4f} | ppl-per-action {math.exp(loss):.4f}', file=sys.stderr)
+    best_loss = evaluate(dev_loader, parser)
+    print(f'** Evaluate on devset:', end=' ', file=sys.stderr)
+    print(f'nll-per-action {best_loss:.4f} | ppl-per-action {math.exp(best_loss):.4f}',
+          file=sys.stderr)
+    while counter < patience:
+        epoch_num += 1
+        train(train_loader, parser, optimizer, epoch_num=epoch_num, **kwargs)
+        if epoch_num % eval_interval == 0:
+            loss = evaluate(dev_loader, parser)
+            print(f'** Evaluate on devset:', end=' ', file=sys.stderr)
+            print(f'nll-per-action {loss:.4f}', end=' | ', file=sys.stderr)
+            print(f'ppl-per-action {math.exp(loss):.4f}', file=sys.stderr)
+            loss = math.exp(loss) if on_ppl else loss
+            if loss < best_loss - tol:
+                print('** Found new best loss on devset', file=sys.stderr)
+                if save_to is not None:
+                    torch.save(parser.state_dict(), save_to)
+                    print(f'** Model saved to {save_to}', file=sys.stderr)
+                best_loss = loss
+                counter = 0
+            else:
+                counter += 1
+    train_runtime = timedelta(seconds=time.time()-start_time)
+    print('** Training finished in', train_runtime, file=sys.stderr)
