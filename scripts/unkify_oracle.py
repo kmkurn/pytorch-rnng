@@ -3,6 +3,7 @@
 from argparse import ArgumentParser
 from collections import Counter
 
+from rnng.actions import GenAction, NTAction
 from rnng.oracle import DiscOracle, GenOracle
 
 
@@ -26,8 +27,20 @@ oracle_class = GenOracle if args.generative else DiscOracle
 oracles = read_oracles_from_file(oracle_class, args.training_file)
 
 counter = Counter([w for oracle in oracles for w in oracle.words])
+vocab_words = set()
+vocab_pos = set()
+vocab_nt = set()
+for oracle in oracles:
+    vocab_words.update([w for w in oracle.words if counter[w] >= args.min_count])
+    vocab_pos.update(oracle.pos_tags)
+    vocab_nt.update([a.label for a in oracle.actions if isinstance(a, NTAction)])
 
 oracles = read_oracles_from_file(oracle_class, args.oracle_file)
 for oracle in oracles:
-    oracle.words = [w if counter[w] >= args.min_count else 'UNK' for w in oracle.words]
+    if set(oracle.pos_tags) - vocab_pos:
+        continue
+    nt_labels = {a.label for a in oracle.actions if isinstance(a, NTAction)}
+    if nt_labels - vocab_nt:
+        continue
+    oracle.words = [w if w in vocab_words else 'UNK' for w in oracle.words]
     print(oracle, end='\n\n')
