@@ -92,6 +92,7 @@ def train_early_stopping(train_loader: DataLoader, dev_loader: DataLoader, parse
     print(f'** Evaluate on devset:', end=' ', file=sys.stderr)
     print(f'nll-per-action {best_loss:.4f} | ppl-per-action {math.exp(best_loss):.4f}',
           file=sys.stderr)
+    best_loss = math.exp(best_loss) if on_ppl else best_loss
     while counter < patience:
         epoch_num += 1
         train(train_loader, parser, optimizer, epoch_num=epoch_num, **kwargs)
