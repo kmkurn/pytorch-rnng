@@ -42,7 +42,7 @@ class TestShiftAction(object):
         fake_parser.verify_shift.assert_called_once_with()
 
 
-class TestReduceAction:
+class TestReduceAction(object):
     as_str = 'REDUCE'
 
     @staticmethod
@@ -81,7 +81,7 @@ class TestReduceAction:
         fake_parser.verify_reduce.assert_called_once_with()
 
 
-class TestNTAction:
+class TestNTAction(object):
     as_str = 'NT({label})'
 
     @staticmethod
@@ -126,7 +126,7 @@ class TestNTAction:
         fake_parser.verify_push_nt.assert_called_once_with()
 
 
-class TestGenAction:
+class TestGenAction(object):
     as_str = 'GEN({word})'
 
     @staticmethod
