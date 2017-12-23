@@ -102,8 +102,7 @@ class NTAction(Action):
         if not line.startswith('NT(') or not line.endswith(')'):
             raise ValueError('invalid string value for NT(X) action')
         else:
-            start = line.find('(') + 1
-            return cls(line[start:-1])
+            return cls(line[3:-1])
 
     def verify_on(self, parser) -> None:
         parser.verify_push_nt()
@@ -130,8 +129,7 @@ class GenAction(Action):
         if not line.startswith('GEN(') or not line.endswith(')'):
             raise ValueError('invalid string value for GEN(w) action')
         else:
-            start = line.find('(') + 1
-            return cls(line[start:-1])
+            return cls(line[4:-1])
 
     def verify_on(self, parser) -> None:
         raise NotImplementedError('generative RNNG is not implemented yet')
