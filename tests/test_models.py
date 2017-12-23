@@ -170,16 +170,32 @@ class TestStackLSTM(object):
             lstm.pop()
 
 
-def test_log_softmax():
+def test_log_softmax_without_restrictions():
+    inputs = Variable(torch.randn(2, 5))
+
+    outputs = log_softmax(inputs)
+
+    assert isinstance(outputs, Variable)
+    assert outputs.size() == inputs.size()
+    assert all(x == pytest.approx(1.) for x in outputs.exp().sum(dim=1).data)
+
+
+def test_log_softmax_with_restrictions():
     restrictions = torch.LongTensor([0, 2])
     inputs = Variable(torch.randn(1, 5))
 
-    outputs = log_softmax(inputs, restrictions)
+    outputs = log_softmax(inputs, restrictions=restrictions)
 
-    assert isinstance(outputs, Variable)
-    assert outputs.size() == (1, 5)
     nonzero_indices = outputs.view(-1).exp().data.nonzero().view(-1)
-    assert all(nonzero_indices.eq(torch.LongTensor([1, 3, 4])))
+    assert nonzero_indices.tolist() == [1, 3, 4]
+
+
+def test_log_softmax_with_invalid_restrictions_dimension():
+    restrictions = torch.LongTensor([[0, 2]])
+    inputs = Variable(torch.randn(1, 5))
+    with pytest.raises(ValueError) as excinfo:
+        log_softmax(inputs, restrictions=restrictions)
+    assert 'restrictions must have dimension of 1, got 2' in str(excinfo.value)
 
 
 class TestDiscRNNGrammar:

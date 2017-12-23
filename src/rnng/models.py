@@ -1,5 +1,6 @@
 from collections import OrderedDict
-from typing import Collection, List, Mapping, NamedTuple, Sequence, Sized, Tuple, Union, cast
+from typing import (Collection, List, Mapping, NamedTuple, Optional, Sequence, Sized, Tuple,
+                    Union, cast)
 from typing import Dict  # noqa
 import abc
 
@@ -92,12 +93,12 @@ class StackLSTM(nn.Module, Sized):
         return len(self._outputs_hist)
 
 
-def log_softmax(inputs: Variable, restrictions=None) -> Variable:
+def log_softmax(inputs: Variable, restrictions: Optional[Variable] = None) -> Variable:
     if restrictions is None:
         return F.log_softmax(inputs)
 
     if restrictions.dim() != 1:
-        raise RuntimeError('restrictions must be one dimensional')
+        raise ValueError(f'restrictions must have dimension of 1, got {restrictions.dim()}')
 
     addend = Variable(
         inputs.data.new(inputs.size()).zero_().index_fill_(
