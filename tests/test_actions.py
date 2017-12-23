@@ -1,11 +1,9 @@
-from unittest.mock import Mock
-
 import pytest
 
 from rnng.actions import ShiftAction, ReduceAction, NTAction, GenAction
 
 
-class TestShiftAction:
+class TestShiftAction(object):
     as_str = 'SHIFT'
 
     @staticmethod
@@ -13,22 +11,18 @@ class TestShiftAction:
         return ShiftAction()
 
     def test_eq(self):
-        a1 = self.make_action()
-        a2 = self.make_action()
-        assert a1 == a2
-        assert a1 != 'foo'
+        assert self.make_action() == self.make_action()
+        assert self.make_action() != 'foo'
 
     def test_hash(self):
-        a = self.make_action()
-        assert hash(a) == hash(self.as_str)
+        assert hash(self.make_action()) == hash(self.make_action())
 
     def test_str(self):
-        a = self.make_action()
-        assert str(a) == self.as_str
+        assert str(self.make_action()) == self.as_str
 
-    def test_execute_on(self):
+    def test_execute_on(self, mocker):
         a = self.make_action()
-        fake_parser = Mock()
+        fake_parser = mocker.Mock()
         a.execute_on(fake_parser)
         fake_parser.shift.assert_called_once_with()
 
@@ -40,9 +34,9 @@ class TestShiftAction:
         with pytest.raises(ValueError):
             ShiftAction.from_string('asdf')
 
-    def test_verify_on(self):
+    def test_verify_on(self, mocker):
         a = self.make_action()
-        fake_parser = Mock()
+        fake_parser = mocker.Mock()
         a.verify_on(fake_parser)
         fake_parser.verify_shift.assert_called_once_with()
 
@@ -55,22 +49,18 @@ class TestReduceAction:
         return ReduceAction()
 
     def test_eq(self):
-        a1 = self.make_action()
-        a2 = self.make_action()
-        assert a1 == a2
-        assert ReduceAction() != 'foo'
+        assert self.make_action() == self.make_action()
+        assert self.make_action() != 'foo'
 
     def test_hash(self):
-        a = self.make_action()
-        assert hash(a) == hash(self.as_str)
+        assert hash(self.make_action()) == hash(self.make_action())
 
     def test_str(self):
-        a = self.make_action()
-        assert str(a) == self.as_str
+        assert str(self.make_action()) == self.as_str
 
-    def test_execute_on(self):
+    def test_execute_on(self, mocker):
         a = self.make_action()
-        fake_parser = Mock()
+        fake_parser = mocker.Mock()
         a.execute_on(fake_parser)
         fake_parser.reduce.assert_called_once_with()
 
@@ -82,9 +72,9 @@ class TestReduceAction:
         with pytest.raises(ValueError):
             ReduceAction.from_string('asdf')
 
-    def test_verify_on(self):
+    def test_verify_on(self, mocker):
         a = self.make_action()
-        fake_parser = Mock()
+        fake_parser = mocker.Mock()
         a.verify_on(fake_parser)
         fake_parser.verify_reduce.assert_called_once_with()
 
@@ -97,25 +87,21 @@ class TestNTAction:
         return NTAction(label)
 
     def test_eq(self):
-        a1 = self.make_action()
-        a2 = self.make_action()
-        a3 = self.make_action('VP')
-        assert a1 == a2
-        assert a1 != a3
-        assert a1 != 'foo'
+        assert self.make_action() == self.make_action()
+        assert self.make_action() != self.make_action('VP')
+        assert self.make_action() != 'foo'
 
     def test_hash(self):
-        a = self.make_action()
-        assert hash(a) == hash(self.as_str.format(label=a.label))
+        assert hash(self.make_action()) == hash(self.make_action())
+        assert hash(self.make_action()) != hash(self.make_action('VP'))
 
     def test_str(self):
-        label = 'NP'
-        a = self.make_action(label=label)
-        assert str(a) == self.as_str.format(label=label)
-
-    def test_execute_on(self):
         a = self.make_action()
-        fake_parser = Mock()
+        assert str(a) == self.as_str.format(label=a.label)
+
+    def test_execute_on(self, mocker):
+        a = self.make_action()
+        fake_parser = mocker.Mock()
         a.execute_on(fake_parser)
         fake_parser.push_nt.assert_called_once_with(a.label)
 
@@ -129,9 +115,9 @@ class TestNTAction:
         with pytest.raises(ValueError):
             NTAction.from_string('asdf')
 
-    def test_verify_on(self):
+    def test_verify_on(self, mocker):
         a = self.make_action()
-        fake_parser = Mock()
+        fake_parser = mocker.Mock()
         a.verify_on(fake_parser)
         fake_parser.verify_push_nt.assert_called_once_with()
 
@@ -144,22 +130,17 @@ class TestGenAction:
         return GenAction(word)
 
     def test_eq(self):
-        a1 = self.make_action()
-        a2 = self.make_action()
-        a3 = self.make_action(word='fdsa')
-        assert a1 == a2
-        assert a1 != a3
-        assert a1 != 'foo'
+        assert self.make_action() == self.make_action()
+        assert self.make_action() != self.make_action('fdsa')
+        assert self.make_action() != 'foo'
 
     def test_hash(self):
-        word = 'asdf'
-        a = self.make_action(word=word)
-        assert hash(a) == hash(self.as_str.format(word=word))
+        assert hash(self.make_action()) == hash(self.make_action())
+        assert hash(self.make_action()) != hash(self.make_action('fdsa'))
 
     def test_str(self):
-        word = 'asdf'
-        a = self.make_action(word=word)
-        assert str(a) == self.as_str.format(word=word)
+        a = self.make_action()
+        assert str(a) == self.as_str.format(word=a.word)
 
     def test_from_string(self):
         word = 'asdf'
