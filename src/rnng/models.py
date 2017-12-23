@@ -24,17 +24,30 @@ class StackLSTM(nn.Module, Sized):
     BATCH_SIZE = 1
     SEQ_LEN = 1
 
-    def __init__(self, input_size: int, hidden_size: int, num_layers: int = 1,
-                 dropout: float = 0.) -> None:
-        if num_layers < 1:
-            raise ValueError('number of layers is at least 1')
+    def __init__(self,
+                 input_size: int,
+                 hidden_size: int,
+                 num_layers: int = 1,
+                 dropout: float = 0.,
+                 lstm_class=None) -> None:
+        if input_size <= 0:
+            raise ValueError(f'nonpositive input size: {input_size}')
+        if hidden_size <= 0:
+            raise ValueError(f'nonpositive hidden size: {hidden_size}')
+        if num_layers <= 0:
+            raise ValueError(f'nonpositive number of layers: {num_layers}')
+        if dropout < 0. or dropout >= 1.:
+            raise ValueError(f'invalid dropout rate: {dropout}')
+
+        if lstm_class is None:
+            lstm_class = nn.LSTM
 
         super().__init__()
         self.input_size = input_size
         self.hidden_size = hidden_size
         self.num_layers = num_layers
         self.dropout = dropout
-        self.lstm = nn.LSTM(input_size, hidden_size, num_layers=num_layers, dropout=dropout)
+        self.lstm = lstm_class(input_size, hidden_size, num_layers=num_layers, dropout=dropout)
         self.h0 = nn.Parameter(torch.Tensor(num_layers, self.BATCH_SIZE, hidden_size))
         self.c0 = nn.Parameter(torch.Tensor(num_layers, self.BATCH_SIZE, hidden_size))
         init_states = (self.h0, self.c0)
@@ -42,7 +55,10 @@ class StackLSTM(nn.Module, Sized):
         self._outputs_hist = []  # type: List[Variable]
 
     def forward(self, inputs: Variable) -> Tuple[Variable, Variable]:
-        # inputs: input_size
+        if inputs.size() != (self.input_size,):
+            raise ValueError(
+                f'expected input to have size ({self.input_size},), got {tuple(inputs.size())}'
+            )
         assert self._states_hist
 
         # Set seq_len and batch_size to 1

@@ -1,6 +1,7 @@
 from nltk.tree import Tree
 import pytest
 import torch
+import torch.nn as nn
 from torch.autograd import Variable
 
 from rnng.actions import ShiftAction, ReduceAction, NTAction
@@ -9,9 +10,11 @@ from rnng.models import (DiscRNNGrammar, EmptyStackError, StackLSTM, log_softmax
 from rnng.utils import ItemStore
 
 
-class MockLSTM:
-    def __init__(self, input_size, hidden_size, num_layers=1):
-        self.input_size = input_size
+torch.manual_seed(12345)
+
+
+class MockLSTM(object):
+    def __init__(self, input_size, hidden_size, num_layers=1, **kwargs):
         self.hidden_size = hidden_size
         self.num_layers = num_layers
         self.index = 0
@@ -30,85 +33,141 @@ class MockLSTM:
                 Variable(torch.randn(self.num_layers, 1, self.hidden_size)))
 
 
-class TestStackLSTM:
+class TestStackLSTM(object):
     input_size = 10
     hidden_size = 5
     num_layers = 3
+    dropout = 0.5
     seq_len = 3
 
-    def test_call(self, mocker):
-        mock_lstm = MockLSTM(self.input_size, self.hidden_size, num_layers=self.num_layers)
-        mocker.patch('rnng.models.nn.LSTM', return_value=mock_lstm, autospec=True)
+    def make_stack_lstm(self, lstm_class=None):
+        return StackLSTM(
+            self.input_size, self.hidden_size, num_layers=self.num_layers,
+            lstm_class=lstm_class
+        )
+
+    def test_init_minimal(self):
+        lstm = StackLSTM(self.input_size, self.hidden_size)
+        assert lstm.input_size == self.input_size
+        assert lstm.hidden_size == self.hidden_size
+        assert lstm.num_layers == 1
+        assert lstm.dropout == pytest.approx(0, abs=1e-7)
+        assert isinstance(lstm.lstm, nn.LSTM)
+        assert lstm.lstm.input_size == lstm.input_size
+        assert lstm.lstm.hidden_size == lstm.hidden_size
+        assert lstm.lstm.num_layers == lstm.num_layers
+        assert lstm.lstm.bias
+        assert not lstm.lstm.batch_first
+        assert lstm.lstm.dropout == pytest.approx(0, abs=1e-7)
+        assert not lstm.lstm.bidirectional
+        assert isinstance(lstm.h0, Variable)
+        assert lstm.h0.size() == (lstm.num_layers, 1, lstm.hidden_size)
+        assert isinstance(lstm.c0, Variable)
+        assert lstm.c0.size() == (lstm.num_layers, 1, lstm.hidden_size)
+
+    def test_init_full(self):
+        lstm = StackLSTM(
+            self.input_size, self.hidden_size, num_layers=self.num_layers,
+            dropout=self.dropout, lstm_class=MockLSTM
+        )
+        assert lstm.num_layers == self.num_layers
+        assert lstm.dropout == pytest.approx(self.dropout)
+        assert isinstance(lstm.lstm, MockLSTM)
+
+    def test_init_with_nonpositive_input_size(self):
+        with pytest.raises(ValueError) as excinfo:
+            StackLSTM(0, self.hidden_size)
+        assert 'nonpositive input size: 0' in str(excinfo.value)
+
+    def test_init_with_nonpositive_hidden_size(self):
+        with pytest.raises(ValueError) as excinfo:
+            StackLSTM(self.input_size, 0)
+        assert 'nonpositive hidden size: 0' in str(excinfo.value)
+
+    def test_init_with_nonpositive_num_layers(self):
+        with pytest.raises(ValueError) as excinfo:
+            StackLSTM(self.input_size, self.hidden_size, num_layers=0)
+        assert 'nonpositive number of layers: 0' in str(excinfo.value)
+
+    def test_init_with_invalid_dropout_rate(self):
+        dropout = -0.1
+        with pytest.raises(ValueError) as excinfo:
+            StackLSTM(self.input_size, self.hidden_size, dropout=dropout)
+        assert f'invalid dropout rate: {dropout}' in str(excinfo.value)
+
+        dropout = 1.
+        with pytest.raises(ValueError) as excinfo:
+            StackLSTM(self.input_size, self.hidden_size, dropout=dropout)
+        assert f'invalid dropout rate: {dropout}' in str(excinfo.value)
+
+    def test_call(self):
         inputs = [Variable(torch.randn(self.input_size)) for _ in range(self.seq_len)]
 
-        lstm = StackLSTM(self.input_size, self.hidden_size, num_layers=self.num_layers)
+        lstm = self.make_stack_lstm(lstm_class=MockLSTM)
 
         assert len(lstm) == 0
         h, c = lstm(inputs[0])
-        assert torch.equal(h.data, mock_lstm.retvals[0][1][0].data)
-        assert torch.equal(c.data, mock_lstm.retvals[0][1][1].data)
+        assert torch.equal(h.data, lstm.lstm.retvals[0][1][0].data)
+        assert torch.equal(c.data, lstm.lstm.retvals[0][1][1].data)
         assert len(lstm) == 1
         h, c = lstm(inputs[1])
-        assert torch.equal(h.data, mock_lstm.retvals[1][1][0].data)
-        assert torch.equal(c.data, mock_lstm.retvals[1][1][1].data)
+        assert torch.equal(h.data, lstm.lstm.retvals[1][1][0].data)
+        assert torch.equal(c.data, lstm.lstm.retvals[1][1][1].data)
         assert len(lstm) == 2
         h, c = lstm(inputs[2])
-        assert torch.equal(h.data, mock_lstm.retvals[2][1][0].data)
-        assert torch.equal(c.data, mock_lstm.retvals[2][1][1].data)
+        assert torch.equal(h.data, lstm.lstm.retvals[2][1][0].data)
+        assert torch.equal(c.data, lstm.lstm.retvals[2][1][1].data)
         assert len(lstm) == 3
 
-    def test_top(self, mocker):
-        mock_lstm = MockLSTM(self.input_size, self.hidden_size, num_layers=self.num_layers)
-        mocker.patch('rnng.models.nn.LSTM', return_value=mock_lstm, autospec=True)
+    def test_call_with_invalid_size(self):
+        lstm = self.make_stack_lstm()
+        with pytest.raises(ValueError) as excinfo:
+            lstm(Variable(torch.randn(2, 10)))
+        assert f'expected input to have size ({lstm.input_size},), got (2, 10)' in str(
+            excinfo.value
+        )
+
+    def test_top(self):
         inputs = [Variable(torch.randn(self.input_size)) for _ in range(self.seq_len)]
 
-        lstm = StackLSTM(self.input_size, self.hidden_size, num_layers=self.num_layers)
+        lstm = self.make_stack_lstm(lstm_class=MockLSTM)
 
         assert lstm.top is None
         lstm(inputs[0])
-        assert torch.equal(lstm.top.data, mock_lstm.retvals[0][0].data.squeeze())
+        assert torch.equal(lstm.top.data, lstm.lstm.retvals[0][0].data.squeeze())
         lstm(inputs[1])
-        assert torch.equal(lstm.top.data, mock_lstm.retvals[1][0].data.squeeze())
+        assert torch.equal(lstm.top.data, lstm.lstm.retvals[1][0].data.squeeze())
         lstm(inputs[2])
-        assert torch.equal(lstm.top.data, mock_lstm.retvals[2][0].data.squeeze())
+        assert torch.equal(lstm.top.data, lstm.lstm.retvals[2][0].data.squeeze())
 
-    def test_pop(self, mocker):
-        mock_lstm = MockLSTM(self.input_size, self.hidden_size, num_layers=self.num_layers)
-        mocker.patch('rnng.models.nn.LSTM', return_value=mock_lstm, autospec=True)
+    def test_pop(self):
         inputs = [Variable(torch.randn(self.input_size)) for _ in range(self.seq_len)]
 
-        lstm = StackLSTM(self.input_size, self.hidden_size, num_layers=self.num_layers)
+        lstm = self.make_stack_lstm(lstm_class=MockLSTM)
         lstm(inputs[0])
         lstm(inputs[1])
         lstm(inputs[2])
 
         h, c = lstm.pop()
-        assert torch.equal(h.data, mock_lstm.retvals[2][1][0].data)
-        assert torch.equal(c.data, mock_lstm.retvals[2][1][1].data)
-        assert torch.equal(lstm.top.data, mock_lstm.retvals[1][0].data.squeeze())
+        assert torch.equal(h.data, lstm.lstm.retvals[2][1][0].data)
+        assert torch.equal(c.data, lstm.lstm.retvals[2][1][1].data)
+        assert torch.equal(lstm.top.data, lstm.lstm.retvals[1][0].data.squeeze())
         assert len(lstm) == 2
         h, c = lstm.pop()
-        assert torch.equal(h.data, mock_lstm.retvals[1][1][0].data)
-        assert torch.equal(c.data, mock_lstm.retvals[1][1][1].data)
-        assert torch.equal(lstm.top.data, mock_lstm.retvals[0][0].data.squeeze())
+        assert torch.equal(h.data, lstm.lstm.retvals[1][1][0].data)
+        assert torch.equal(c.data, lstm.lstm.retvals[1][1][1].data)
+        assert torch.equal(lstm.top.data, lstm.lstm.retvals[0][0].data.squeeze())
         assert len(lstm) == 1
         h, c = lstm.pop()
-        assert torch.equal(h.data, mock_lstm.retvals[0][1][0].data)
-        assert torch.equal(c.data, mock_lstm.retvals[0][1][1].data)
+        assert torch.equal(h.data, lstm.lstm.retvals[0][1][0].data)
+        assert torch.equal(c.data, lstm.lstm.retvals[0][1][1].data)
         assert lstm.top is None
         assert len(lstm) == 0
 
-    def test_pop_when_empty(self, mocker):
-        mock_lstm = MockLSTM(self.input_size, self.hidden_size, num_layers=self.num_layers)
-        mocker.patch('rnng.models.nn.LSTM', return_value=mock_lstm, autospec=True)
-
-        lstm = StackLSTM(self.input_size, self.hidden_size, num_layers=self.num_layers)
+    def test_pop_when_empty(self):
+        lstm = self.make_stack_lstm()
         with pytest.raises(EmptyStackError):
             lstm.pop()
-
-    def test_num_layers_too_low(self):
-        with pytest.raises(ValueError):
-            StackLSTM(10, 5, num_layers=0)
 
 
 def test_log_softmax():
