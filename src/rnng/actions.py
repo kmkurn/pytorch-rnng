@@ -25,8 +25,14 @@ class Action(metaclass=abc.ABCMeta):
 
     @classmethod
     @abc.abstractmethod
-    def from_string(cls, line: str):
-        pass
+    def from_string(cls, line: str) -> 'Action':
+        for subclass in cls.__subclasses__():
+            try:
+                return subclass.from_string(line)
+            except ValueError:
+                pass  # continue to next subclass
+        else:
+            raise ValueError(f'no action found from string {line}')
 
     @abc.abstractmethod
     def verify_on(self, parser) -> None:

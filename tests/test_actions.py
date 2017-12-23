@@ -1,6 +1,12 @@
 import pytest
 
-from rnng.actions import ShiftAction, ReduceAction, NTAction, GenAction
+from rnng.actions import Action, ShiftAction, ReduceAction, NTAction, GenAction
+
+
+def test_action_from_invalid_string():
+    with pytest.raises(ValueError) as excinfo:
+        Action.from_string('asdf')
+    assert f'no action found from string asdf' in str(excinfo.value)
 
 
 class TestShiftAction(object):
@@ -27,13 +33,8 @@ class TestShiftAction(object):
         fake_parser.shift.assert_called_once_with()
 
     def test_from_string(self):
-        a = ShiftAction.from_string(self.as_str)
+        a = Action.from_string(self.as_str)
         assert isinstance(a, ShiftAction)
-
-    def test_from_invalid_string(self):
-        with pytest.raises(ValueError) as excinfo:
-            ShiftAction.from_string('asdf')
-        assert f'invalid string value for {self.as_str} action' in str(excinfo.value)
 
     def test_verify_on(self, mocker):
         a = self.make_action()
@@ -66,13 +67,8 @@ class TestReduceAction(object):
         fake_parser.reduce.assert_called_once_with()
 
     def test_from_string(self):
-        a = ReduceAction.from_string(self.as_str)
+        a = Action.from_string(self.as_str)
         assert isinstance(a, ReduceAction)
-
-    def test_from_invalid_string(self):
-        with pytest.raises(ValueError) as excinfo:
-            ReduceAction.from_string('asdf')
-        assert f'invalid string value for {self.as_str} action' in str(excinfo.value)
 
     def test_verify_on(self, mocker):
         a = self.make_action()
@@ -109,15 +105,9 @@ class TestNTAction(object):
 
     def test_from_string(self):
         label = 'NP'
-        a = NTAction.from_string(self.as_str.format(label=label))
+        a = Action.from_string(self.as_str.format(label=label))
         assert isinstance(a, NTAction)
         assert a.label == label
-
-    def test_from_invalid_string(self):
-        with pytest.raises(ValueError) as excinfo:
-            NTAction.from_string('asdf')
-        as_str = self.as_str.format(label='X')
-        assert f'invalid string value for {as_str} action' in str(excinfo.value)
 
     def test_verify_on(self, mocker):
         a = self.make_action()
@@ -148,12 +138,6 @@ class TestGenAction(object):
 
     def test_from_string(self):
         word = 'asdf'
-        a = GenAction.from_string(self.as_str.format(word=word))
+        a = Action.from_string(self.as_str.format(word=word))
         assert isinstance(a, GenAction)
         assert a.word == word
-
-    def test_from_invalid_string(self):
-        with pytest.raises(ValueError) as excinfo:
-            GenAction.from_string('asdf')
-        as_str = self.as_str.format(word='w')
-        assert f'invalid string value for {as_str} action' in str(excinfo.value)
