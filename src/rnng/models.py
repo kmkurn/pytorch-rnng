@@ -1,14 +1,14 @@
-import abc
 from collections import OrderedDict
 from typing import Collection, List, Mapping, NamedTuple, Sequence, Sized, Tuple, Union, cast
 from typing import Dict  # noqa
+import abc
 
 from nltk.tree import Tree
+from torch.autograd import Variable
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.nn.init as init
-from torch.autograd import Variable
 
 from rnng.actions import Action, ShiftAction, ReduceAction, NTAction
 from rnng.typing import Word, POSTag, NTLabel, WordId, POSId, NTId, ActionId

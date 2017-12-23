@@ -1,8 +1,8 @@
 from nltk.tree import Tree
+from torch.autograd import Variable
 import pytest
 import torch
 import torch.nn as nn
-from torch.autograd import Variable
 
 from rnng.actions import ShiftAction, ReduceAction, NTAction
 from rnng.models import (DiscRNNGrammar, EmptyStackError, StackLSTM, log_softmax,
