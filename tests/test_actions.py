@@ -1,3 +1,5 @@
+from unittest.mock import Mock
+
 import pytest
 
 from rnng.actions import ShiftAction, ReduceAction, NTAction, GenAction
@@ -26,6 +28,18 @@ class TestShiftAction:
         with pytest.raises(ValueError):
             ShiftAction.from_string('asdf')
 
+    def test_verify_on(self):
+        a = ShiftAction()
+        fake_parser = Mock()
+        a.verify_on(fake_parser)
+        fake_parser.verify_shift.assert_called_once_with()
+
+    def test_execute_on(self):
+        a = ShiftAction()
+        fake_parser = Mock()
+        a.execute_on(fake_parser)
+        fake_parser.shift.assert_called_once_with()
+
 
 class TestReduceAction:
     as_str = 'REDUCE'
@@ -49,6 +63,18 @@ class TestReduceAction:
     def test_from_invalid_string(self):
         with pytest.raises(ValueError):
             ReduceAction.from_string('asdf')
+
+    def test_verify_on(self):
+        a = ReduceAction()
+        fake_parser = Mock()
+        a.verify_on(fake_parser)
+        fake_parser.verify_reduce.assert_called_once_with()
+
+    def test_execute_on(self):
+        a = ReduceAction()
+        fake_parser = Mock()
+        a.execute_on(fake_parser)
+        fake_parser.reduce.assert_called_once_with()
 
 
 class TestNTAction:
@@ -79,6 +105,18 @@ class TestNTAction:
     def test_from_invalid_string(self):
         with pytest.raises(ValueError):
             NTAction.from_string('asdf')
+
+    def test_verify_on(self):
+        a = NTAction('NP')
+        fake_parser = Mock()
+        a.verify_on(fake_parser)
+        fake_parser.verify_push_nt.assert_called_once_with()
+
+    def test_execute_on(self):
+        a = NTAction('NP')
+        fake_parser = Mock()
+        a.execute_on(fake_parser)
+        fake_parser.push_nt.assert_called_once_with(a.label)
 
 
 class TestGenAction:

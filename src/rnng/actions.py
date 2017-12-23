@@ -44,17 +44,12 @@ class ShiftAction(Action):
         return hash(str(self))
 
     def verify_legal_on(self, parser) -> None:
-        from rnng.models import DiscRNNGrammar
-
-        if not isinstance(parser, DiscRNNGrammar):
-            raise TypeError(f'{self} action is not legal for parser type {type(parser)}')
         parser.verify_shift()
 
-    def execute_on(self, parser) -> None:
-        from rnng.models import DiscRNNGrammar
+    def verify_on(self, parser) -> None:
+        self.verify_legal_on(parser)
 
-        if not isinstance(parser, DiscRNNGrammar):
-            raise TypeError(f'{self} action is not legal for parser type {type(parser)}')
+    def execute_on(self, parser) -> None:
         parser.shift()
 
     @classmethod
@@ -77,6 +72,9 @@ class ReduceAction(Action):
 
     def verify_legal_on(self, parser) -> None:
         parser.verify_reduce()
+
+    def verify_on(self, parser) -> None:
+        self.verify_legal_on(parser)
 
     def execute_on(self, parser) -> None:
         parser.reduce()
@@ -104,6 +102,9 @@ class NTAction(Action):
 
     def verify_legal_on(self, parser) -> None:
         parser.verify_push_nt()
+
+    def verify_on(self, parser) -> None:
+        self.verify_legal_on(parser)
 
     def execute_on(self, parser) -> None:
         parser.push_nt(self.label)
