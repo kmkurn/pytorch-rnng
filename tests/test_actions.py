@@ -8,17 +8,23 @@ from rnng.actions import ShiftAction, ReduceAction, NTAction, GenAction
 class TestShiftAction:
     as_str = 'SHIFT'
 
-    def test_to_string(self):
-        a = ShiftAction()
-        assert str(a) == self.as_str
+    def test_eq(self):
+        assert ShiftAction() == ShiftAction()
+        assert ShiftAction() != ReduceAction()
 
     def test_hash(self):
         a = ShiftAction()
         assert hash(a) == hash(self.as_str)
 
-    def test_eq(self):
-        assert ShiftAction() == ShiftAction()
-        assert ShiftAction() != ReduceAction()
+    def test_str(self):
+        a = ShiftAction()
+        assert str(a) == self.as_str
+
+    def test_execute_on(self):
+        a = ShiftAction()
+        fake_parser = Mock()
+        a.execute_on(fake_parser)
+        fake_parser.shift.assert_called_once_with()
 
     def test_from_string(self):
         a = ShiftAction.from_string(self.as_str)
@@ -34,27 +40,27 @@ class TestShiftAction:
         a.verify_on(fake_parser)
         fake_parser.verify_shift.assert_called_once_with()
 
-    def test_execute_on(self):
-        a = ShiftAction()
-        fake_parser = Mock()
-        a.execute_on(fake_parser)
-        fake_parser.shift.assert_called_once_with()
-
 
 class TestReduceAction:
     as_str = 'REDUCE'
 
-    def test_to_string(self):
-        a = ReduceAction()
-        assert str(a) == self.as_str
+    def test_eq(self):
+        assert ReduceAction() == ReduceAction()
+        assert ReduceAction() != ShiftAction()
 
     def test_hash(self):
         a = ReduceAction()
         assert hash(a) == hash(self.as_str)
 
-    def test_eq(self):
-        assert ReduceAction() == ReduceAction()
-        assert ReduceAction() != ShiftAction()
+    def test_str(self):
+        a = ReduceAction()
+        assert str(a) == self.as_str
+
+    def test_execute_on(self):
+        a = ReduceAction()
+        fake_parser = Mock()
+        a.execute_on(fake_parser)
+        fake_parser.reduce.assert_called_once_with()
 
     def test_from_string(self):
         a = ReduceAction.from_string(self.as_str)
@@ -70,31 +76,31 @@ class TestReduceAction:
         a.verify_on(fake_parser)
         fake_parser.verify_reduce.assert_called_once_with()
 
-    def test_execute_on(self):
-        a = ReduceAction()
-        fake_parser = Mock()
-        a.execute_on(fake_parser)
-        fake_parser.reduce.assert_called_once_with()
-
 
 class TestNTAction:
     as_str = 'NT({label})'
-
-    def test_to_string(self):
-        label = 'NP'
-        a = NTAction(label)
-        assert str(a) == self.as_str.format(label=label)
-
-    def test_hash(self):
-        label = 'NP'
-        a = NTAction(label)
-        assert hash(a) == hash(self.as_str.format(label=label))
 
     def test_eq(self):
         a = NTAction('NP')
         assert a == NTAction(a.label)
         assert a != NTAction('asdf')
         assert a != ShiftAction()
+
+    def test_hash(self):
+        label = 'NP'
+        a = NTAction(label)
+        assert hash(a) == hash(self.as_str.format(label=label))
+
+    def test_str(self):
+        label = 'NP'
+        a = NTAction(label)
+        assert str(a) == self.as_str.format(label=label)
+
+    def test_execute_on(self):
+        a = NTAction('NP')
+        fake_parser = Mock()
+        a.execute_on(fake_parser)
+        fake_parser.push_nt.assert_called_once_with(a.label)
 
     def test_from_string(self):
         label = 'NP'
@@ -112,31 +118,25 @@ class TestNTAction:
         a.verify_on(fake_parser)
         fake_parser.verify_push_nt.assert_called_once_with()
 
-    def test_execute_on(self):
-        a = NTAction('NP')
-        fake_parser = Mock()
-        a.execute_on(fake_parser)
-        fake_parser.push_nt.assert_called_once_with(a.label)
-
 
 class TestGenAction:
     as_str = 'GEN({word})'
-
-    def test_to_string(self):
-        word = 'asdf'
-        a = GenAction(word)
-        assert str(a) == self.as_str.format(word=word)
-
-    def test_hash(self):
-        word = 'asdf'
-        a = GenAction(word)
-        assert hash(a) == hash(self.as_str.format(word=word))
 
     def test_eq(self):
         a = GenAction('asdf')
         assert a == GenAction(a.word)
         assert a != GenAction('fdsa')
         assert a != ReduceAction()
+
+    def test_hash(self):
+        word = 'asdf'
+        a = GenAction(word)
+        assert hash(a) == hash(self.as_str.format(word=word))
+
+    def test_str(self):
+        word = 'asdf'
+        a = GenAction(word)
+        assert str(a) == self.as_str.format(word=word)
 
     def test_from_string(self):
         word = 'asdf'

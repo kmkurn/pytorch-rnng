@@ -5,7 +5,22 @@ from rnng.typing import NTLabel, Word
 
 class Action(metaclass=abc.ABCMeta):
     @abc.abstractmethod
+    def __eq__(self, other) -> bool:
+        pass
+
+    @abc.abstractmethod
+    def __hash__(self) -> int:
+        pass
+
+    def __repr__(self) -> str:
+        return str(self)
+
+    @abc.abstractmethod
     def __str__(self) -> str:
+        pass
+
+    @abc.abstractmethod
+    def execute_on(self, parser) -> None:
         pass
 
     @classmethod
@@ -14,40 +29,19 @@ class Action(metaclass=abc.ABCMeta):
         pass
 
     @abc.abstractmethod
-    def __eq__(self, other) -> bool:
+    def verify_on(self, parser) -> None:
         pass
-
-    @abc.abstractmethod
-    def __hash__(self) -> int:
-        pass
-
-    @abc.abstractmethod
-    def verify_legal_on(self, parser) -> None:
-        pass
-
-    @abc.abstractmethod
-    def execute_on(self, parser) -> None:
-        pass
-
-    def __repr__(self) -> str:
-        return str(self)
 
 
 class ShiftAction(Action):
-    def __str__(self) -> str:
-        return 'SHIFT'
-
     def __eq__(self, other) -> bool:
         return isinstance(other, self.__class__)
 
     def __hash__(self) -> int:
         return hash(str(self))
 
-    def verify_legal_on(self, parser) -> None:
-        parser.verify_shift()
-
-    def verify_on(self, parser) -> None:
-        self.verify_legal_on(parser)
+    def __str__(self) -> str:
+        return 'SHIFT'
 
     def execute_on(self, parser) -> None:
         parser.shift()
@@ -59,22 +53,19 @@ class ShiftAction(Action):
         else:
             return cls()
 
+    def verify_on(self, parser) -> None:
+        parser.verify_shift()
+
 
 class ReduceAction(Action):
-    def __str__(self) -> str:
-        return 'REDUCE'
-
     def __eq__(self, other) -> bool:
         return isinstance(other, self.__class__)
 
     def __hash__(self) -> int:
         return hash(str(self))
 
-    def verify_legal_on(self, parser) -> None:
-        parser.verify_reduce()
-
-    def verify_on(self, parser) -> None:
-        self.verify_legal_on(parser)
+    def __str__(self) -> str:
+        return 'REDUCE'
 
     def execute_on(self, parser) -> None:
         parser.reduce()
@@ -86,13 +77,13 @@ class ReduceAction(Action):
         else:
             return cls()
 
+    def verify_on(self, parser) -> None:
+        parser.verify_reduce()
+
 
 class NTAction(Action):
     def __init__(self, label: NTLabel) -> None:
         self.label = label
-
-    def __str__(self) -> str:
-        return f'NT({self.label})'
 
     def __eq__(self, other) -> bool:
         return isinstance(other, self.__class__) and self.label == other.label  # type: ignore
@@ -100,11 +91,8 @@ class NTAction(Action):
     def __hash__(self) -> int:
         return hash(str(self))
 
-    def verify_legal_on(self, parser) -> None:
-        parser.verify_push_nt()
-
-    def verify_on(self, parser) -> None:
-        self.verify_legal_on(parser)
+    def __str__(self) -> str:
+        return f'NT({self.label})'
 
     def execute_on(self, parser) -> None:
         parser.push_nt(self.label)
@@ -117,13 +105,13 @@ class NTAction(Action):
             start = line.find('(') + 1
             return cls(line[start:-1])
 
+    def verify_on(self, parser) -> None:
+        parser.verify_push_nt()
+
 
 class GenAction(Action):
     def __init__(self, word: Word) -> None:
         self.word = word
-
-    def __str__(self) -> str:
-        return f'GEN({self.word})'
 
     def __eq__(self, other) -> bool:
         return isinstance(other, self.__class__) and self.word == other.word  # type: ignore
@@ -131,8 +119,8 @@ class GenAction(Action):
     def __hash__(self) -> int:
         return hash(str(self))
 
-    def verify_legal_on(self, parser) -> None:
-        raise NotImplementedError('generative RNNG is not implemented yet')
+    def __str__(self) -> str:
+        return f'GEN({self.word})'
 
     def execute_on(self, parser) -> None:
         raise NotImplementedError('generative RNNG is not implemented yet')
@@ -144,3 +132,6 @@ class GenAction(Action):
         else:
             start = line.find('(') + 1
             return cls(line[start:-1])
+
+    def verify_on(self, parser) -> None:
+        raise NotImplementedError('generative RNNG is not implemented yet')

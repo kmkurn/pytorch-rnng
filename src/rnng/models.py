@@ -448,7 +448,7 @@ class DiscRNNGrammar(RNNGrammar):
     def _is_legal(self, aid: ActionId) -> bool:
         assert 0 <= aid < len(self.action_store)
         try:
-            self.action_store.get_by_id(aid).verify_legal_on(self)
+            self.action_store.get_by_id(aid).verify_on(self)
         except IllegalActionError:
             return False
         else:
