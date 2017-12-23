@@ -31,8 +31,9 @@ class TestShiftAction(object):
         assert isinstance(a, ShiftAction)
 
     def test_from_invalid_string(self):
-        with pytest.raises(ValueError):
+        with pytest.raises(ValueError) as excinfo:
             ShiftAction.from_string('asdf')
+        assert f'invalid string value for {self.as_str} action' in str(excinfo.value)
 
     def test_verify_on(self, mocker):
         a = self.make_action()
@@ -69,8 +70,9 @@ class TestReduceAction:
         assert isinstance(a, ReduceAction)
 
     def test_from_invalid_string(self):
-        with pytest.raises(ValueError):
+        with pytest.raises(ValueError) as excinfo:
             ReduceAction.from_string('asdf')
+        assert f'invalid string value for {self.as_str} action' in str(excinfo.value)
 
     def test_verify_on(self, mocker):
         a = self.make_action()
@@ -112,8 +114,10 @@ class TestNTAction:
         assert a.label == label
 
     def test_from_invalid_string(self):
-        with pytest.raises(ValueError):
+        with pytest.raises(ValueError) as excinfo:
             NTAction.from_string('asdf')
+        as_str = self.as_str.format(label='X')
+        assert f'invalid string value for {as_str} action' in str(excinfo.value)
 
     def test_verify_on(self, mocker):
         a = self.make_action()
@@ -149,5 +153,7 @@ class TestGenAction:
         assert a.word == word
 
     def test_from_invalid_string(self):
-        with pytest.raises(ValueError):
+        with pytest.raises(ValueError) as excinfo:
             GenAction.from_string('asdf')
+        as_str = self.as_str.format(word='w')
+        assert f'invalid string value for {as_str} action' in str(excinfo.value)
