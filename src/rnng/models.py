@@ -1,8 +1,6 @@
-from collections import OrderedDict
 from typing import (Collection, List, Mapping, NamedTuple, Optional, Sequence, Sized, Tuple,
                     Union, cast)
 from typing import Dict  # noqa
-import abc
 
 from nltk.tree import Tree
 from torch.autograd import Variable
@@ -13,7 +11,6 @@ import torch.nn.init as init
 
 from rnng.actions import Action, ShiftAction, ReduceAction, NTAction
 from rnng.typing import Word, POSTag, NTLabel, WordId, POSId, NTId, ActionId
-from rnng.utils import ItemStore
 
 
 class EmptyStackError(Exception):
@@ -54,6 +51,18 @@ class StackLSTM(nn.Module, Sized):
         init_states = (self.h0, self.c0)
         self._states_hist = [init_states]
         self._outputs_hist = []  # type: List[Variable]
+
+        self.reset_parameters()
+
+    def reset_parameters(self) -> None:
+        for name, param in self.lstm.named_parameters():
+            if name.startswith('weight'):
+                init.orthogonal(param)
+            else:
+                assert name.startswith('bias')
+                init.constant(param, 0.)
+        init.constant(self.h0, 0.)
+        init.constant(self.c0, 0.)
 
     def forward(self, inputs: Variable) -> Tuple[Variable, Variable]:
         if inputs.size() != (self.input_size,):
@@ -216,6 +225,8 @@ class DiscRNNG(nn.Module):
         self._nt_emb = None  # type: Variable
         self._action_emb = None  # type: Variable
 
+        self.reset_parameters()
+
     @property
     def num_words(self) -> int:
         return len(self.word2id)
@@ -253,6 +264,45 @@ class DiscRNNG(nn.Module):
     @property
     def started(self) -> bool:
         return self._started
+
+    def reset_parameters(self) -> None:
+        # Embeddings
+        for name in 'word pos nt action'.split():
+            embedding = getattr(self, f'{name}_embedding')
+            embedding.reset_parameters()
+
+        # Encoders
+        for name in 'stack buffer history'.split():
+            encoder = getattr(self, f'{name}_encoder')
+            encoder.reset_parameters()
+
+        # Compositions
+        for name in 'fwd bwd'.split():
+            lstm = getattr(self, f'{name}_composer')
+            for pname, pval in lstm.named_parameters():
+                if pname.startswith('weight'):
+                    init.orthogonal(pval)
+                else:
+                    assert pname.startswith('bias')
+                    init.constant(pval, 0.)
+
+        # Transformations
+        gain = init.calculate_gain('relu')
+        for name in 'word nt action'.split():
+            layer = getattr(self, f'{name}2encoder')
+            init.xavier_uniform(layer[0].weight, gain=gain)
+            init.constant(layer[0].bias, 1.)
+        init.xavier_uniform(self.fwdbwd2composed[0].weight, gain=gain)
+        init.constant(self.fwdbwd2composed[0].bias, 1.)
+        init.xavier_uniform(self.encoders2summary[1].weight, gain=gain)
+        init.constant(self.encoders2summary[1].bias, 1.)
+        init.xavier_uniform(self.summary2actionprobs.weight)
+        init.constant(self.summary2actionprobs.bias, 0.)
+
+        # Guards
+        for name in 'stack buffer history'.split():
+            guard = getattr(self, f'{name}_guard')
+            init.constant(guard, 0.)
 
     def start(self, words: Sequence[Word], pos_tags: Sequence[POSTag]) -> None:
         if len(words) != len(pos_tags):

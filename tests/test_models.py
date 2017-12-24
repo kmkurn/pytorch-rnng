@@ -18,6 +18,9 @@ class MockLSTM(object):
         self.index = 0
         self.retvals = [(self._get_output(), self._get_hn_cn()) for _ in range(3)]
 
+    def named_parameters(self):
+        return []
+
     def __call__(self, inputs, init_states):
         retval = self.retvals[self.index]
         self.index = (self.index + 1) % len(self.retvals)
