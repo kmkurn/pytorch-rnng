@@ -5,9 +5,7 @@ import torch
 import torch.nn as nn
 
 from rnng.actions import ShiftAction, ReduceAction, NTAction
-from rnng.models import (DiscRNNGrammar, EmptyStackError, StackLSTM, log_softmax,
-                         IllegalActionError)
-from rnng.utils import ItemStore
+from rnng.models import DiscRNNG, EmptyStackError, StackLSTM, log_softmax, IllegalActionError
 
 
 torch.manual_seed(12345)
@@ -198,81 +196,171 @@ def test_log_softmax_with_invalid_restrictions_dimension():
     assert 'restrictions must have dimension of 1, got 2' in str(excinfo.value)
 
 
-class TestDiscRNNGrammar:
+class TestDiscRNNG(object):
     word2id = {'John': 0, 'loves': 1, 'Mary': 2}
     pos2id = {'NNP': 0, 'VBZ': 1}
     nt2id = {'S': 2, 'NP': 1, 'VP': 0}
-    action_store = ItemStore()
-    actions = [NTAction('S'), NTAction('NP'), NTAction('VP'), ShiftAction(), ReduceAction()]
-    for a in actions:
-        action_store.add(a)
+    actionstr2id = {'NT(S)': 0, 'NT(NP)': 1, 'NT(VP)': 2, 'SHIFT': 3, 'REDUCE': 4}
 
-    def test_init(self):
-        parser = DiscRNNGrammar(self.word2id, self.pos2id, self.nt2id, self.action_store)
+    def make_parser(self):
+        return DiscRNNG(self.word2id, self.pos2id, self.nt2id, self.actionstr2id)
 
+    def test_init_minimal(self):
+        parser = DiscRNNG(self.word2id, self.pos2id, self.nt2id, self.actionstr2id)
+
+        # Attributes
+        assert parser.word2id == self.word2id
+        assert parser.pos2id == self.pos2id
+        assert parser.nt2id == self.nt2id
+        assert parser.actionstr2id == self.actionstr2id
+        assert parser.num_words == len(self.word2id)
+        assert parser.num_pos == len(self.pos2id)
+        assert parser.num_nt == len(self.nt2id)
+        assert parser.num_actions == len(self.actionstr2id)
+        assert parser.word_embedding_size == 32
+        assert parser.pos_embedding_size == 12
+        assert parser.nt_embedding_size == 60
+        assert parser.action_embedding_size == 16
+        assert parser.input_size == 128
+        assert parser.hidden_size == 128
+        assert parser.num_layers == 2
+        assert parser.dropout == pytest.approx(0, abs=1e-7)
         assert len(parser.stack_buffer) == 0
         assert len(parser.input_buffer) == 0
         assert len(parser.action_history) == 0
         assert not parser.finished
         assert not parser.started
 
-    def test_init_no_shift_action(self):
-        action_store = ItemStore()
-        actions = [NTAction('S'), NTAction('NP'), NTAction('VP'), ReduceAction()]
-        for a in actions:
-            action_store.add(a)
+        # Embeddings
+        assert isinstance(parser.word_embedding, nn.Embedding)
+        assert parser.word_embedding.num_embeddings == parser.num_words
+        assert parser.word_embedding.embedding_dim == parser.word_embedding_size
+        assert isinstance(parser.pos_embedding, nn.Embedding)
+        assert parser.pos_embedding.num_embeddings == parser.num_pos
+        assert parser.pos_embedding.embedding_dim == parser.pos_embedding_size
+        assert isinstance(parser.nt_embedding, nn.Embedding)
+        assert parser.nt_embedding.num_embeddings == parser.num_nt
+        assert parser.nt_embedding.embedding_dim == parser.nt_embedding_size
+        assert isinstance(parser.action_embedding, nn.Embedding)
+        assert parser.action_embedding.num_embeddings == parser.num_actions
+        assert parser.action_embedding.embedding_dim == parser.action_embedding_size
 
-        with pytest.raises(ValueError):
-            DiscRNNGrammar(self.word2id, self.pos2id, self.nt2id, action_store)
+        # Parser state encoders
+        for state_name in 'stack buffer history'.split():
+            state_encoder = getattr(parser, f'{state_name}_encoder')
+            assert isinstance(state_encoder, StackLSTM)
+            assert state_encoder.input_size == parser.input_size
+            assert state_encoder.hidden_size == parser.hidden_size
+            assert state_encoder.num_layers == parser.num_layers
+            assert state_encoder.dropout == pytest.approx(parser.dropout, abs=1e-7)
+            state_guard = getattr(parser, f'{state_name}_guard')
+            assert isinstance(state_guard, nn.Parameter)
+            assert state_guard.size() == (parser.input_size,)
+
+        # Compositions
+        for direction in 'fwd bwd'.split():
+            composer = getattr(parser, f'{direction}_composer')
+            assert isinstance(composer, nn.LSTM)
+            assert composer.input_size == parser.input_size
+            assert composer.hidden_size == parser.input_size
+            assert composer.num_layers == parser.num_layers
+            assert composer.dropout == pytest.approx(parser.dropout, abs=1e-7)
+            assert composer.bias
+            assert not composer.bidirectional
+
+        # Transformation (word -> encoder)
+        assert isinstance(parser.word2encoder, nn.Sequential)
+        assert len(parser.word2encoder) == 2
+        assert isinstance(parser.word2encoder[0], nn.Linear)
+        assert parser.word2encoder[0].in_features == (
+            parser.word_embedding_size + parser.pos_embedding_size
+        )
+        assert parser.word2encoder[0].out_features == parser.hidden_size
+        assert parser.word2encoder[0].bias is not None
+        assert isinstance(parser.word2encoder[1], nn.ReLU)
+
+        # Transformation (NT -> encoder)
+        assert isinstance(parser.nt2encoder, nn.Sequential)
+        assert len(parser.nt2encoder) == 2
+        assert isinstance(parser.nt2encoder[0], nn.Linear)
+        assert parser.nt2encoder[0].in_features == parser.nt_embedding_size
+        assert parser.nt2encoder[0].out_features == parser.hidden_size
+        assert parser.nt2encoder[0].bias is not None
+        assert isinstance(parser.nt2encoder[1], nn.ReLU)
+
+        # Transformation (action -> encoder)
+        assert isinstance(parser.action2encoder, nn.Sequential)
+        assert len(parser.action2encoder) == 2
+        assert isinstance(parser.action2encoder[0], nn.Linear)
+        assert parser.action2encoder[0].in_features == parser.action_embedding_size
+        assert parser.action2encoder[0].out_features == parser.hidden_size
+        assert parser.action2encoder[0].bias is not None
+        assert isinstance(parser.action2encoder[1], nn.ReLU)
+
+        # Transformation (composer -> composed)
+        assert isinstance(parser.fwdbwd2composed, nn.Sequential)
+        assert len(parser.fwdbwd2composed) == 2
+        assert isinstance(parser.fwdbwd2composed[0], nn.Linear)
+        assert parser.fwdbwd2composed[0].in_features == 2 * parser.input_size
+        assert parser.fwdbwd2composed[0].out_features == parser.input_size
+        assert parser.fwdbwd2composed[0].bias is not None
+        assert isinstance(parser.fwdbwd2composed[1], nn.ReLU)
+
+        # Transformation (encoders -> parser summary)
+        assert isinstance(parser.encoders2summary, nn.Sequential)
+        assert len(parser.encoders2summary) == 3
+        assert isinstance(parser.encoders2summary[0], nn.Dropout)
+        assert parser.encoders2summary[0].p == pytest.approx(parser.dropout, abs=1e-7)
+        assert isinstance(parser.encoders2summary[1], nn.Linear)
+        assert parser.encoders2summary[1].in_features == 3 * parser.hidden_size
+        assert parser.encoders2summary[1].out_features == parser.hidden_size
+        assert parser.encoders2summary[1].bias is not None
+        assert isinstance(parser.encoders2summary[2], nn.ReLU)
+
+        # Transformation (parser summary -> action prob dist)
+        assert isinstance(parser.summary2actionprobs, nn.Linear)
+        assert parser.summary2actionprobs.in_features == parser.hidden_size
+        assert parser.summary2actionprobs.out_features == parser.num_actions
+        assert parser.summary2actionprobs.bias is not None
+
+    def test_init_full(self):
+        kwargs = dict(
+            word_embedding_size=2,
+            pos_embedding_size=3,
+            nt_embedding_size=4,
+            action_embedding_size=5,
+            input_size=6,
+            hidden_size=7,
+            num_layers=8,
+            dropout=0.5,
+        )
+        parser = DiscRNNG(self.word2id, self.pos2id, self.nt2id, self.actionstr2id, **kwargs)
+
+        for key, value in kwargs.items():
+            assert getattr(parser, key) == value
+
+    def test_init_no_shift_action(self):
+        actionstr2id = self.actionstr2id.copy()
+        actionstr2id.pop('SHIFT')
+
+        with pytest.raises(ValueError) as excinfo:
+            DiscRNNG(self.word2id, self.pos2id, self.nt2id, actionstr2id)
+        assert 'no SHIFT action found in actionstr2id mapping' in str(excinfo.value)
 
     def test_init_no_reduce_action(self):
-        action_store = ItemStore()
-        actions = [NTAction('S'), NTAction('NP'), NTAction('VP'), ShiftAction()]
-        for a in actions:
-            action_store.add(a)
+        actionstr2id = self.actionstr2id.copy()
+        actionstr2id.pop('REDUCE')
 
-        with pytest.raises(ValueError):
-            DiscRNNGrammar(self.word2id, self.pos2id, self.nt2id, action_store)
-
-    def test_init_word_id_out_of_range(self):
-        word2id = dict(self.word2id)
-
-        word2id['John'] = len(word2id)
-        with pytest.raises(ValueError):
-            DiscRNNGrammar(word2id, self.pos2id, self.nt2id, self.action_store)
-
-        word2id['John'] = -1
-        with pytest.raises(ValueError):
-            DiscRNNGrammar(word2id, self.pos2id, self.nt2id, self.action_store)
-
-    def test_init_pos_id_out_of_range(self):
-        pos2id = dict(self.pos2id)
-
-        pos2id['NNP'] = len(pos2id)
-        with pytest.raises(ValueError):
-            DiscRNNGrammar(self.word2id, pos2id, self.nt2id, self.action_store)
-
-        pos2id['NNP'] = -1
-        with pytest.raises(ValueError):
-            DiscRNNGrammar(self.word2id, pos2id, self.nt2id, self.action_store)
-
-    def test_init_nt_id_out_of_range(self):
-        nt2id = dict(self.nt2id)
-
-        nt2id['S'] = len(nt2id)
-        with pytest.raises(ValueError):
-            DiscRNNGrammar(self.word2id, self.pos2id, nt2id, self.action_store)
-
-        nt2id['S'] = -1
-        with pytest.raises(ValueError):
-            DiscRNNGrammar(self.word2id, self.pos2id, nt2id, self.action_store)
+        with pytest.raises(ValueError) as excinfo:
+            DiscRNNG(self.word2id, self.pos2id, self.nt2id, actionstr2id)
+        assert 'no REDUCE action found in actionstr2id mapping' in str(excinfo.value)
 
     def test_start(self):
-        words = ['John', 'loves', 'Mary']
-        pos_tags = ['NNP', 'VBZ', 'NNP']
-        parser = DiscRNNGrammar(self.word2id, self.pos2id, self.nt2id, self.action_store)
+        words = 'John loves Mary'.split()
+        pos_tags = 'NNP VBZ NNP'.split()
+        parser = self.make_parser()
 
-        parser.start(list(zip(words, pos_tags)))
+        parser.start(words, pos_tags)
 
         assert len(parser.stack_buffer) == 0
         assert parser.input_buffer == words
@@ -280,26 +368,25 @@ class TestDiscRNNGrammar:
         assert not parser.finished
         assert parser.started
 
-    def test_start_with_empty_tagged_words(self):
-        parser = DiscRNNGrammar(self.word2id, self.pos2id, self.nt2id, self.action_store)
+    def test_start_with_unequal_words_and_pos_tags_length(self):
+        words = 'John loves'.split()
+        pos_tags = 'NNP VBZ NNP'.split()
+        parser = self.make_parser()
+        with pytest.raises(ValueError) as excinfo:
+            parser.start(words, pos_tags)
+        assert 'words and POS tags must have equal length' in str(excinfo.value)
 
-        with pytest.raises(ValueError):
-            parser.start([])
+    def test_start_with_empty_words(self):
+        parser = self.make_parser()
+        with pytest.raises(ValueError) as excinfo:
+            parser.start([], [])
+        assert 'words cannot be empty' in str(excinfo.value)
 
-    def test_start_with_invalid_word_or_pos(self):
-        parser = DiscRNNGrammar(self.word2id, self.pos2id, self.nt2id, self.action_store)
-
-        with pytest.raises(ValueError):
-            parser.start([('Bob', 'NNP')])
-
-        with pytest.raises(ValueError):
-            parser.start([('John', 'VBD')])
-
-    def test_do_nt_action(self):
-        words = ['John', 'loves', 'Mary']
-        pos_tags = ['NNP', 'VBZ', 'NNP']
-        parser = DiscRNNGrammar(self.word2id, self.pos2id, self.nt2id, self.action_store)
-        parser.start(list(zip(words, pos_tags)))
+    def test_push_nt(self):
+        words = 'John loves Mary'.split()
+        pos_tags = 'NNP VBZ NNP'.split()
+        parser = self.make_parser()
+        parser.start(words, pos_tags)
         prev_input_buffer = parser.input_buffer
 
         parser.push_nt('S')
@@ -314,52 +401,32 @@ class TestDiscRNNGrammar:
         assert parser.action_history[-1] == NTAction('S')
         assert not parser.finished
 
-    def test_do_illegal_push_nt_action(self):
+    def test_illegal_push_nt(self):
         words = ['John']
         pos_tags = ['NNP']
-        parser = DiscRNNGrammar(self.word2id, self.pos2id, self.nt2id, self.action_store)
+        parser = self.make_parser()
 
         # Buffer is empty
-        parser.start(list(zip(words, pos_tags)))
+        parser.start(words, pos_tags)
         parser.push_nt('S')
         parser.shift()
-        with pytest.raises(IllegalActionError):
+        with pytest.raises(IllegalActionError) as excinfo:
             parser.push_nt('NP')
+        assert 'cannot do NT(X) when input buffer is empty' in str(excinfo.value)
 
         # More than 100 open nonterminals
-        parser.start(list(zip(words, pos_tags)))
+        parser.start(words, pos_tags)
         for i in range(100):
             parser.push_nt('S')
-        with pytest.raises(IllegalActionError):
+        with pytest.raises(IllegalActionError) as excinfo:
             parser.push_nt('NP')
+        assert 'max number of open nonterminals reached' in str(excinfo.value)
 
-    def test_push_unknown_nt(self):
-        words = ['John']
-        pos_tags = ['NNP']
-        parser = DiscRNNGrammar(self.word2id, self.pos2id, self.nt2id, self.action_store)
-        parser.start(list(zip(words, pos_tags)))
-
-        with pytest.raises(KeyError):
-            parser.push_nt('asdf')
-
-    def test_push_known_nt_but_unknown_action(self):
-        actions = [NTAction('NP'), NTAction('VP'), ShiftAction(), ReduceAction()]
-        action_store = ItemStore()
-        for a in actions:
-            action_store.add(a)
-        words = ['John']
-        pos_tags = ['NNP']
-        parser = DiscRNNGrammar(self.word2id, self.pos2id, self.nt2id, action_store)
-        parser.start(list(zip(words, pos_tags)))
-
-        with pytest.raises(KeyError):
-            parser.push_nt('S')
-
-    def test_do_shift_action(self):
-        words = ['John', 'loves', 'Mary']
-        pos_tags = ['NNP', 'VBZ', 'NNP']
-        parser = DiscRNNGrammar(self.word2id, self.pos2id, self.nt2id, self.action_store)
-        parser.start(list(zip(words, pos_tags)))
+    def test_shift(self):
+        words = 'John loves Mary'.split()
+        pos_tags = 'NNP VBZ NNP'.split()
+        parser = self.make_parser()
+        parser.start(words, pos_tags)
         parser.push_nt('S')
         parser.push_nt('NP')
 
@@ -373,28 +440,30 @@ class TestDiscRNNGrammar:
         assert parser.action_history[-1] == ShiftAction()
         assert not parser.finished
 
-    def test_do_illegal_shift_action(self):
+    def test_illegal_shift(self):
         words = ['John']
         pos_tags = ['NNP']
-        parser = DiscRNNGrammar(self.word2id, self.pos2id, self.nt2id, self.action_store)
+        parser = self.make_parser()
 
         # No open nonterminal
-        parser.start(list(zip(words, pos_tags)))
-        with pytest.raises(IllegalActionError):
+        parser.start(words, pos_tags)
+        with pytest.raises(IllegalActionError) as excinfo:
             parser.shift()
+        assert 'cannot SHIFT when no open nonterminal exist' in str(excinfo.value)
 
         # Buffer is empty
-        parser.start(list(zip(words, pos_tags)))
+        parser.start(words, pos_tags)
         parser.push_nt('S')
         parser.shift()
-        with pytest.raises(IllegalActionError):
+        with pytest.raises(IllegalActionError) as excinfo:
             parser.shift()
+        assert 'cannot SHIFT when input buffer is empty' in str(excinfo.value)
 
-    def test_do_reduce_action(self):
-        words = ['John', 'loves', 'Mary']
-        pos_tags = ['NNP', 'VBZ', 'NNP']
-        parser = DiscRNNGrammar(self.word2id, self.pos2id, self.nt2id, self.action_store)
-        parser.start(list(zip(words, pos_tags)))
+    def test_reduce(self):
+        words = 'John loves Mary'.split()
+        pos_tags = 'NNP VBZ NNP'.split()
+        parser = self.make_parser()
+        parser.start(words, pos_tags)
         parser.push_nt('S')
         parser.push_nt('NP')
         parser.shift()
@@ -413,79 +482,83 @@ class TestDiscRNNGrammar:
         assert parser.action_history[-1] == ReduceAction()
         assert not parser.finished
 
-    def test_do_illegal_reduce_action(self):
-        words = ['John', 'loves']
-        pos_tags = ['NNP', 'VBZ']
-        parser = DiscRNNGrammar(self.word2id, self.pos2id, self.nt2id, self.action_store)
+    def test_illegal_reduce(self):
+        words = 'John loves'.split()
+        pos_tags = 'NNP VBZ'.split()
+        parser = self.make_parser()
 
         # Top of stack is an open nonterminal
-        parser.start(list(zip(words, pos_tags)))
+        parser.start(words, pos_tags)
         parser.push_nt('S')
-        with pytest.raises(IllegalActionError):
+        with pytest.raises(IllegalActionError) as excinfo:
             parser.reduce()
+        assert 'cannot REDUCE when top of stack is an open nonterminal' in str(excinfo.value)
 
         # Buffer is not empty and REDUCE will finish parsing
-        parser.start(list(zip(words, pos_tags)))
+        parser.start(words, pos_tags)
         parser.push_nt('S')
         parser.shift()
-        with pytest.raises(IllegalActionError):
+        with pytest.raises(IllegalActionError) as excinfo:
             parser.reduce()
+        assert 'cannot REDUCE because there are words not SHIFT-ed yet' in str(excinfo.value)
 
     def test_do_action_when_not_started(self):
-        parser = DiscRNNGrammar(self.word2id, self.pos2id, self.nt2id, self.action_store)
+        parser = self.make_parser()
 
-        with pytest.raises(RuntimeError):
+        with pytest.raises(RuntimeError) as excinfo:
             parser.push_nt('S')
-        with pytest.raises(RuntimeError):
+        assert 'parser is not started yet, please call `start` first' in str(excinfo.value)
+
+        with pytest.raises(RuntimeError) as excinfo:
             parser.shift()
-        with pytest.raises(RuntimeError):
+        assert 'parser is not started yet, please call `start` first' in str(excinfo.value)
+
+        with pytest.raises(RuntimeError) as excinfo:
             parser.reduce()
+        assert 'parser is not started yet, please call `start` first' in str(excinfo.value)
 
     def test_forward(self):
-        words = ['John', 'loves', 'Mary']
-        pos_tags = ['NNP', 'VBZ', 'NNP']
-        parser = DiscRNNGrammar(self.word2id, self.pos2id, self.nt2id, self.action_store)
-        parser.start(list(zip(words, pos_tags)))
-        parser.push_nt('S')
-        parser.push_nt('NP')
-        parser.shift()
-        parser.reduce()
+        words = 'John loves Mary'.split()
+        pos_tags = 'NNP VBZ NNP'.split()
+        actions = [
+            NTAction('S'),
+            NTAction('NP'),
+            ShiftAction(),
+            ReduceAction(),
+            NTAction('VP'),
+            ShiftAction(),
+            NTAction('NP'),
+            ShiftAction(),
+            ReduceAction(),
+            ReduceAction(),
+            ReduceAction(),
+        ]
+        parser = self.make_parser()
 
-        action_logprobs = parser()
+        loss = parser(words, pos_tags, actions)
 
-        assert isinstance(action_logprobs, Variable)
-        assert action_logprobs.size() == (len(self.action_store),)
-        sum_prob = action_logprobs.exp().sum().data[0]
-        assert 0.999 <= sum_prob <= 1.001
+        assert isinstance(loss, Variable)
+        assert loss.size() == (1,)
+        loss.backward()
 
     def test_forward_with_illegal_actions(self):
-        words = ['John', 'loves', 'Mary']
-        pos_tags = ['NNP', 'VBZ', 'NNP']
-        parser = DiscRNNGrammar(self.word2id, self.pos2id, self.nt2id, self.action_store)
-        parser.start(list(zip(words, pos_tags)))
+        words = 'John loves Mary'.split()
+        pos_tags = 'NNP VBZ NNP'.split()
+        actions = [ShiftAction()]
+        parser = self.make_parser()
 
-        action_probs = parser().exp().data
+        loss = parser(words, pos_tags, actions)
 
-        assert action_probs[self.action_store[NTAction('S')]] > 0.
-        assert action_probs[self.action_store[NTAction('NP')]] > 0.
-        assert action_probs[self.action_store[NTAction('VP')]] > 0.
-        assert -0.001 <= action_probs[self.action_store[ShiftAction()]] <= 0.001
-        assert -0.001 <= action_probs[self.action_store[ReduceAction()]] <= 0.001
-
-    def test_forward_when_not_started(self):
-        parser = DiscRNNGrammar(self.word2id, self.pos2id, self.nt2id, self.action_store)
-
-        with pytest.raises(RuntimeError):
-            parser()
+        assert (-loss).exp().data[0] == pytest.approx(0, abs=1e-7)
 
     def test_finished(self):
-        words = ['John', 'loves', 'Mary']
-        pos_tags = ['NNP', 'VBZ', 'NNP']
-        parser = DiscRNNGrammar(self.word2id, self.pos2id, self.nt2id, self.action_store)
+        words = 'John loves Mary'.split()
+        pos_tags = 'NNP VBZ NNP'.split()
+        parser = self.make_parser()
         exp_parse_tree = Tree('S', [Tree('NP', ['John']),
                                     Tree('VP', ['loves', Tree('NP', ['Mary'])])])
 
-        parser.start(list(zip(words, pos_tags)))
+        parser.start(words, pos_tags)
         parser.push_nt('S')
         parser.push_nt('NP')
         parser.shift()
@@ -501,11 +574,15 @@ class TestDiscRNNGrammar:
         assert parser.finished
         parse_tree = parser.stack_buffer[-1]
         assert parse_tree == exp_parse_tree
-        with pytest.raises(RuntimeError):
-            parser()
-        with pytest.raises(RuntimeError):
+
+        with pytest.raises(RuntimeError) as excinfo:
             parser.push_nt('NP')
-        with pytest.raises(RuntimeError):
+        assert 'cannot do action when parser is finished' in str(excinfo.value)
+
+        with pytest.raises(RuntimeError) as excinfo:
             parser.shift()
-        with pytest.raises(RuntimeError):
+        assert 'cannot do action when parser is finished' in str(excinfo.value)
+
+        with pytest.raises(RuntimeError) as excinfo:
             parser.reduce()
+        assert 'cannot do action when parser is finished' in str(excinfo.value)
