@@ -32,7 +32,7 @@ def test_make_example_from_disc_oracle():
     example = make_example(oracle, fields)
 
     assert isinstance(example, Example)
-    assert example.actions == actions
+    assert example.actions == [str(a) for a in actions]
     assert example.nonterms == [a.label for a in actions if isinstance(a, NTAction)]
     assert example.pos_tags == pos_tags
     assert example.words == words
@@ -65,7 +65,7 @@ def test_make_example_from_gen_oracle():
     example = make_example(oracle, fields)
 
     assert isinstance(example, Example)
-    assert example.actions == actions
+    assert example.actions == [str(a) for a in actions]
     assert example.nonterms == [a.label for a in actions if isinstance(a, NTAction)]
     assert example.pos_tags == pos_tags
     assert example.words == words
