@@ -321,10 +321,10 @@ class TestDiscRNNG(object):
         assert isinstance(parser.encoders2summary[2], nn.ReLU)
 
         # Transformation (parser summary -> action prob dist)
-        assert isinstance(parser.summary2actionprobs, nn.Linear)
-        assert parser.summary2actionprobs.in_features == parser.hidden_size
-        assert parser.summary2actionprobs.out_features == parser.num_actions
-        assert parser.summary2actionprobs.bias is not None
+        assert isinstance(parser.summary2actionlogprobs, nn.Linear)
+        assert parser.summary2actionlogprobs.in_features == parser.hidden_size
+        assert parser.summary2actionlogprobs.out_features == parser.num_actions
+        assert parser.summary2actionlogprobs.bias is not None
 
     def test_init_full(self):
         kwargs = dict(

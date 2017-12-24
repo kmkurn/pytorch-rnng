@@ -218,7 +218,7 @@ class DiscRNNG(nn.Module):
             nn.Linear(3 * self.hidden_size, self.hidden_size),
             nn.ReLU(),
         )
-        self.summary2actionprobs = nn.Linear(self.hidden_size, self.num_actions)
+        self.summary2actionlogprobs = nn.Linear(self.hidden_size, self.num_actions)
 
         # Final embeddings
         self._word_emb = {}  # type: Dict[WordId, Variable]
@@ -296,8 +296,8 @@ class DiscRNNG(nn.Module):
         init.constant(self.fwdbwd2composed[0].bias, 1.)
         init.xavier_uniform(self.encoders2summary[1].weight, gain=gain)
         init.constant(self.encoders2summary[1].bias, 1.)
-        init.xavier_uniform(self.summary2actionprobs.weight)
-        init.constant(self.summary2actionprobs.bias, 0.)
+        init.xavier_uniform(self.summary2actionlogprobs.weight)
+        init.constant(self.summary2actionlogprobs.bias, 0.)
 
         # Guards
         for name in 'stack buffer history'.split():
@@ -502,7 +502,7 @@ class DiscRNNG(nn.Module):
         illegal_action_ids = self._get_illegal_action_ids()
         # (num_actions,)
         return log_softmax(
-            self.summary2actionprobs(parser_summary),
+            self.summary2actionlogprobs(parser_summary),
             restrictions=illegal_action_ids
         ).view(-1)
 
