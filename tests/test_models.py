@@ -4,7 +4,7 @@ import pytest
 import torch
 import torch.nn as nn
 
-from rnng.actions import ShiftAction, ReduceAction, NTAction
+from rnng.actions import Action, ShiftAction, ReduceAction, NTAction
 from rnng.models import DiscRNNG, EmptyStackError, StackLSTM, log_softmax, IllegalActionError
 
 
@@ -508,15 +508,15 @@ class TestDiscRNNG(object):
     def test_do_action_when_not_started(self):
         parser = self.make_parser()
 
-        with pytest.raises(RuntimeError) as excinfo:
+        with pytest.raises(IllegalActionError) as excinfo:
             parser.push_nt('S')
         assert 'parser is not started yet, please call `start` first' in str(excinfo.value)
 
-        with pytest.raises(RuntimeError) as excinfo:
+        with pytest.raises(IllegalActionError) as excinfo:
             parser.shift()
         assert 'parser is not started yet, please call `start` first' in str(excinfo.value)
 
-        with pytest.raises(RuntimeError) as excinfo:
+        with pytest.raises(IllegalActionError) as excinfo:
             parser.reduce()
         assert 'parser is not started yet, please call `start` first' in str(excinfo.value)
 
@@ -578,14 +578,31 @@ class TestDiscRNNG(object):
         parse_tree = parser.stack_buffer[-1]
         assert parse_tree == exp_parse_tree
 
-        with pytest.raises(RuntimeError) as excinfo:
+        with pytest.raises(IllegalActionError) as excinfo:
             parser.push_nt('NP')
         assert 'cannot do action when parser is finished' in str(excinfo.value)
 
-        with pytest.raises(RuntimeError) as excinfo:
+        with pytest.raises(IllegalActionError) as excinfo:
             parser.shift()
         assert 'cannot do action when parser is finished' in str(excinfo.value)
 
-        with pytest.raises(RuntimeError) as excinfo:
+        with pytest.raises(IllegalActionError) as excinfo:
             parser.reduce()
         assert 'cannot do action when parser is finished' in str(excinfo.value)
+
+    def test_decode(self):
+        words = 'John loves Mary'.split()
+        pos_tags = 'NNP VBZ NNP'.split()
+        parser = self.make_parser()
+        best_action_ids = parser.decode(words, pos_tags)
+        id2actionstr = {v: k for k, v in parser.actionstr2id.items()}
+
+        assert isinstance(best_action_ids, list)
+        parser.start(words, pos_tags)
+        for best_aid in best_action_ids:
+            log_probs = parser.compute_action_log_probs()
+            _, max_a = torch.max(log_probs, dim=0)
+            assert best_aid == max_a.data[0]
+            action = Action.from_string(id2actionstr[best_aid])
+            action.execute_on(parser)
+        assert parser.finished

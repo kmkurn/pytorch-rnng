@@ -344,13 +344,25 @@ class DiscRNNG(nn.Module):
         self.start(words, pos_tags)
         llh = 0.
         for action in actions:
-            log_probs = self._compute_log_action_probs()
+            log_probs = self.compute_action_log_probs()
             llh += log_probs[self.actionstr2id[str(action)]]
             try:
                 action.execute_on(self)
             except IllegalActionError:
                 break
         return -llh
+
+    def decode(self, words: Sequence[Word], pos_tags: Sequence[POSTag]) -> List[ActionId]:
+        self.start(words, pos_tags)
+        id2actionstr = {v: k for k, v in self.actionstr2id.items()}
+        best_action_ids = []
+        while not self.finished:
+            log_probs = self.compute_action_log_probs()
+            max_a = torch.max(log_probs, dim=0)[1].data[0]
+            best_action_ids.append(max_a)
+            action = Action.from_string(id2actionstr[max_a])
+            action.execute_on(self)
+        return best_action_ids
 
     def push_nt(self, nonterm: NTLabel) -> None:
         action = NTAction(nonterm)
@@ -421,9 +433,9 @@ class DiscRNNG(nn.Module):
 
     def _verify_action(self) -> None:
         if not self._started:
-            raise RuntimeError('parser is not started yet, please call `start` first')
+            raise IllegalActionError('parser is not started yet, please call `start` first')
         if self.finished:
-            raise RuntimeError('cannot do action when parser is finished')
+            raise IllegalActionError('cannot do action when parser is finished')
 
     def _append_history(self, action: Action) -> None:
         self._history.append(action)
@@ -488,8 +500,9 @@ class DiscRNNG(nn.Module):
         # (input_size,)
         return self.fwdbwd2composed(torch.cat([fwd_emb, bwd_emb]).view(1, -1)).view(-1)
 
-    def _compute_log_action_probs(self):
-        assert self._started
+    def compute_action_log_probs(self):
+        if not self._started:
+            raise RuntimeError('parser is not started yet, please call `start` first')
 
         encoder_embs = [
             self.stack_encoder.top, self.buffer_encoder.top, self.history_encoder.top
