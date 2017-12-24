@@ -2,11 +2,37 @@ from nltk.tree import Tree
 import pytest
 
 from rnng.actions import ShiftAction, ReduceAction, NTAction, GenAction
-from rnng.oracle import DiscOracle, GenOracle, OracleDataset
-from rnng.utils import ItemStore
+from rnng.oracle import DiscOracle, GenOracle
 
 
 class TestDiscOracle:
+    def test_init(self):
+        actions = [NTAction('S'), ShiftAction()]
+        pos_tags = ['NNP']
+        words = ['John']
+
+        oracle = DiscOracle(actions, pos_tags, words)
+
+        assert oracle.actions == actions
+        assert oracle.pos_tags == pos_tags
+        assert oracle.words == words
+
+    def test_init_with_unequal_shift_count_and_number_of_words(self):
+        actions = [NTAction('S')]
+        pos_tags = ['NNP']
+        words = ['John']
+        with pytest.raises(ValueError) as excinfo:
+            DiscOracle(actions, pos_tags, words)
+        assert 'number of words should match number of SHIFT actions' in str(excinfo.value)
+
+    def test_init_with_unequal_number_of_words_and_pos_tags(self):
+        actions = [NTAction('S'), ShiftAction()]
+        pos_tags = ['NNP', 'VBZ']
+        words = ['John']
+        with pytest.raises(ValueError) as excinfo:
+            DiscOracle(actions, pos_tags, words)
+        assert 'number of POS tags should match number of words' in str(excinfo.value)
+
     def test_from_parsed_sent(self):
         s = '(S (NP (NNP John)) (VP (VBZ loves) (NP (NNP Mary))))'
         expected_actions = [
@@ -32,24 +58,15 @@ class TestDiscOracle:
         assert oracle.pos_tags == expected_pos_tags
         assert oracle.words == expected_words
 
-    def test_from_string(self):
-        s = 'asdf fdsa\nNNP VBZ\nNT(S)\nSHIFT\nSHIFT\nREDUCE'
-
-        oracle = DiscOracle.from_string(s)
-
-        assert isinstance(oracle, DiscOracle)
-        assert oracle.words == ['asdf', 'fdsa']
-        assert oracle.pos_tags == ['NNP', 'VBZ']
-        assert oracle.actions == [NTAction('S'), ShiftAction(), ShiftAction(), ReduceAction()]
-
-    def test_from_string_too_short(self):
-        s = 'asdf asdf\nNT(S)\nSHIFT\nSHIFT\nREDUCE'
-
-        with pytest.raises(ValueError):
-            DiscOracle.from_string(s)
-
 
 class TestGenOracle:
+    def test_init_with_unequal_gen_count_and_number_of_pos_tags(self):
+        actions = [NTAction('S')]
+        pos_tags = ['NNP']
+        with pytest.raises(ValueError) as excinfo:
+            GenOracle(actions, pos_tags)
+        assert 'number of POS tags should match number of GEN actions' in str(excinfo.value)
+
     def test_from_parsed_sent(self):
         s = '(S (NP (NNP John)) (VP (VBZ loves) (NP (NNP Mary))))'
         expected_actions = [
@@ -74,63 +91,3 @@ class TestGenOracle:
         assert oracle.actions == expected_actions
         assert oracle.words == expected_words
         assert oracle.pos_tags == expected_pos_tags
-
-    def test_from_string(self):
-        s = 'NNP VBZ\nNT(S)\nGEN(asdf)\nGEN(fdsa)\nREDUCE'
-
-        oracle = GenOracle.from_string(s)
-
-        assert isinstance(oracle, GenOracle)
-        assert oracle.words == ['asdf', 'fdsa']
-        assert oracle.pos_tags == ['NNP', 'VBZ']
-        assert oracle.actions == [NTAction('S'), GenAction('asdf'), GenAction('fdsa'),
-                                  ReduceAction()]
-
-    def test_from_string_too_short(self):
-        s = 'NT(S)'
-
-        with pytest.raises(ValueError):
-            GenOracle.from_string(s)
-
-
-class TestOracleDataset:
-    bracketed_sents = [
-        '(S (NP (NNP John)) (VP (VBZ loves) (NP (NNP Mary))))',
-        '(S (NP (NNP Mary)) (VP (VBZ hates) (NP (NNP John))))'  # poor John
-    ]
-    words = {'John', 'loves', 'hates', 'Mary'}
-    pos_tags = {'NNP', 'VBZ'}
-    nt_labels = {'S', 'NP', 'VP'}
-    actions = {NTAction('S'), NTAction('NP'), NTAction('VP'), ShiftAction(), ReduceAction()}
-
-    def test_init(self):
-        oracles = [DiscOracle.from_parsed_sent(Tree.fromstring(s))
-                   for s in self.bracketed_sents]
-
-        dataset = OracleDataset(oracles)
-
-        assert isinstance(dataset.word_store, ItemStore)
-        assert set(dataset.word_store) == self.words
-        assert isinstance(dataset.pos_store, ItemStore)
-        assert set(dataset.pos_store) == self.pos_tags
-        assert isinstance(dataset.nt_store, ItemStore)
-        assert set(dataset.nt_store) == self.nt_labels
-        assert isinstance(dataset.action_store, ItemStore)
-        assert set(dataset.action_store) == self.actions
-
-    def test_getitem(self):
-        oracles = [DiscOracle.from_parsed_sent(Tree.fromstring(s))
-                   for s in self.bracketed_sents]
-
-        dataset = OracleDataset(oracles)
-
-        assert oracles[0] is dataset[0]
-        assert oracles[1] is dataset[1]
-
-    def test_len(self):
-        oracles = [DiscOracle.from_parsed_sent(Tree.fromstring(s))
-                   for s in self.bracketed_sents]
-
-        dataset = OracleDataset(oracles)
-
-        assert len(dataset) == len(oracles)
