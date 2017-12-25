@@ -1,5 +1,6 @@
 import random
 
+from torch.autograd import Variable
 from torchtext.data import Dataset, Example, Field
 
 from rnng.iterator import SimpleIterator
@@ -15,9 +16,10 @@ class TestSimpleIterator(object):
         Example.fromlist(['Mary cries'], [('text', TEXT)]),
     ]
     dataset = Dataset(examples, [('text', TEXT)])
+    TEXT.build_vocab(dataset)
 
     def make_iterator(self):
-        return SimpleIterator(self.dataset)
+        return SimpleIterator(self.dataset, device=-1)
 
     def test_init_minimal(self):
         iterator = SimpleIterator(self.dataset)
@@ -32,11 +34,13 @@ class TestSimpleIterator(object):
         assert not iterator.sort_within_batch
 
     def test_init_full(self):
-        iterator = SimpleIterator(self.dataset, train=False)
+        iterator = SimpleIterator(self.dataset, train=False, device=-1)
         assert not iterator.train
+        assert iterator.device == -1
 
     def test_next(self):
         iterator = self.make_iterator()
         sample = next(iter(iterator))
 
-        assert isinstance(sample, Example)
+        assert isinstance(sample.text, Variable)
+        assert sample.text.size(1) == 1
