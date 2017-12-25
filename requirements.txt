@@ -1,0 +1,8 @@
+dill==0.2.7.1
+flake8==3.3.0
+flake8-mypy==17.8.0
+nltk==3.2.4
+pytest==3.2.1
+pytest-cov==2.5.1
+git+https://github.com/pytorch/tnt.git@master#egg=torchnet
+torchtext==0.2.0
