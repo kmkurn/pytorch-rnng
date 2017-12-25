@@ -26,21 +26,9 @@ class TestShiftAction(object):
     def test_str(self):
         assert str(self.make_action()) == self.as_str
 
-    def test_execute_on(self, mocker):
-        a = self.make_action()
-        fake_parser = mocker.Mock()
-        a.execute_on(fake_parser)
-        fake_parser.shift.assert_called_once_with()
-
     def test_from_string(self):
         a = Action.from_string(self.as_str)
         assert isinstance(a, ShiftAction)
-
-    def test_verify_on(self, mocker):
-        a = self.make_action()
-        fake_parser = mocker.Mock()
-        a.verify_on(fake_parser)
-        fake_parser.verify_shift.assert_called_once_with()
 
 
 class TestReduceAction(object):
@@ -60,21 +48,9 @@ class TestReduceAction(object):
     def test_str(self):
         assert str(self.make_action()) == self.as_str
 
-    def test_execute_on(self, mocker):
-        a = self.make_action()
-        fake_parser = mocker.Mock()
-        a.execute_on(fake_parser)
-        fake_parser.reduce.assert_called_once_with()
-
     def test_from_string(self):
         a = Action.from_string(self.as_str)
         assert isinstance(a, ReduceAction)
-
-    def test_verify_on(self, mocker):
-        a = self.make_action()
-        fake_parser = mocker.Mock()
-        a.verify_on(fake_parser)
-        fake_parser.verify_reduce.assert_called_once_with()
 
 
 class TestNTAction(object):
@@ -97,23 +73,11 @@ class TestNTAction(object):
         a = self.make_action()
         assert str(a) == self.as_str.format(label=a.label)
 
-    def test_execute_on(self, mocker):
-        a = self.make_action()
-        fake_parser = mocker.Mock()
-        a.execute_on(fake_parser)
-        fake_parser.push_nt.assert_called_once_with(a.label)
-
     def test_from_string(self):
         label = 'NP'
         a = Action.from_string(self.as_str.format(label=label))
         assert isinstance(a, NTAction)
         assert a.label == label
-
-    def test_verify_on(self, mocker):
-        a = self.make_action()
-        fake_parser = mocker.Mock()
-        a.verify_on(fake_parser)
-        fake_parser.verify_push_nt.assert_called_once_with()
 
 
 class TestGenAction(object):

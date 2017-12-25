@@ -1,11 +1,10 @@
-from nltk.tree import Tree
 from torch.autograd import Variable
 import pytest
 import torch
 import torch.nn as nn
 
-from rnng.actions import Action, ShiftAction, ReduceAction, NTAction
-from rnng.models import DiscRNNG, EmptyStackError, StackLSTM, log_softmax, IllegalActionError
+from rnng.actions import ShiftAction, ReduceAction, NTAction
+from rnng.models import DiscRNNG, EmptyStackError, StackLSTM, log_softmax
 
 
 torch.manual_seed(12345)
@@ -204,22 +203,58 @@ class TestDiscRNNG(object):
     pos2id = {'NNP': 0, 'VBZ': 1}
     nt2id = {'S': 2, 'NP': 1, 'VP': 0}
     actionstr2id = {'NT(S)': 0, 'NT(NP)': 1, 'NT(VP)': 2, 'SHIFT': 3, 'REDUCE': 4}
+    num_words = len(word2id)
+    num_pos = len(pos2id)
+    num_nt = len(nt2id)
+    num_actions = len(actionstr2id)
+    action2nt = {0: 2, 1: 1, 2: 0}
 
     def make_parser(self):
-        return DiscRNNG(self.word2id, self.pos2id, self.nt2id, self.actionstr2id)
+        return DiscRNNG(
+            self.num_words, self.num_pos, self.num_nt, self.num_actions,
+            self.actionstr2id['SHIFT'], self.actionstr2id['REDUCE'], self.action2nt)
+
+    def make_words(self, words=None):
+        if words is None:
+            words = 'John loves Mary'.split()
+        return Variable(torch.LongTensor([self.word2id[x] for x in words]))
+
+    def make_pos_tags(self, pos_tags=None):
+        if pos_tags is None:
+            pos_tags = 'NNP VBZ NNP'.split()
+        return Variable(torch.LongTensor([self.pos2id[x] for x in pos_tags]))
+
+    def make_actions(self, actions=None):
+        if actions is None:
+            actions = [
+                NTAction('S'),
+                NTAction('NP'),
+                ShiftAction(),
+                ReduceAction(),
+                NTAction('VP'),
+                ShiftAction(),
+                NTAction('NP'),
+                ShiftAction(),
+                ReduceAction(),
+                ReduceAction(),
+                ReduceAction(),
+            ]
+
+        return Variable(torch.LongTensor([self.actionstr2id[str(x)] for x in actions]))
 
     def test_init_minimal(self):
-        parser = DiscRNNG(self.word2id, self.pos2id, self.nt2id, self.actionstr2id)
+        parser = DiscRNNG(
+            self.num_words, self.num_pos, self.num_nt, self.num_actions,
+            self.actionstr2id['SHIFT'], self.actionstr2id['REDUCE'], self.action2nt)
 
         # Attributes
-        assert parser.word2id == self.word2id
-        assert parser.pos2id == self.pos2id
-        assert parser.nt2id == self.nt2id
-        assert parser.actionstr2id == self.actionstr2id
-        assert parser.num_words == len(self.word2id)
-        assert parser.num_pos == len(self.pos2id)
-        assert parser.num_nt == len(self.nt2id)
-        assert parser.num_actions == len(self.actionstr2id)
+        assert parser.num_words == self.num_words
+        assert parser.num_pos == self.num_pos
+        assert parser.num_nt == self.num_nt
+        assert parser.num_actions == self.num_actions
+        assert parser.shift_id == self.actionstr2id['SHIFT']
+        assert parser.reduce_id == self.actionstr2id['REDUCE']
+        assert parser.action2nt == self.action2nt
         assert parser.word_embedding_size == 32
         assert parser.pos_embedding_size == 12
         assert parser.nt_embedding_size == 60
@@ -228,11 +263,7 @@ class TestDiscRNNG(object):
         assert parser.hidden_size == 128
         assert parser.num_layers == 2
         assert parser.dropout == pytest.approx(0, abs=1e-7)
-        assert len(parser.stack_buffer) == 0
-        assert len(parser.input_buffer) == 0
-        assert len(parser.action_history) == 0
         assert not parser.finished
-        assert not parser.started
 
         # Embeddings
         assert isinstance(parser.word_embedding, nn.Embedding)
@@ -337,272 +368,106 @@ class TestDiscRNNG(object):
             num_layers=8,
             dropout=0.5,
         )
-        parser = DiscRNNG(self.word2id, self.pos2id, self.nt2id, self.actionstr2id, **kwargs)
+        parser = DiscRNNG(
+            self.num_words, self.num_pos, self.num_nt, self.num_actions,
+            self.actionstr2id['SHIFT'], self.actionstr2id['REDUCE'], self.action2nt, **kwargs
+        )
 
         for key, value in kwargs.items():
             assert getattr(parser, key) == value
 
-    def test_init_no_shift_action(self):
-        actionstr2id = self.actionstr2id.copy()
-        actionstr2id.pop('SHIFT')
-
-        with pytest.raises(ValueError) as excinfo:
-            DiscRNNG(self.word2id, self.pos2id, self.nt2id, actionstr2id)
-        assert 'no SHIFT action found in actionstr2id mapping' in str(excinfo.value)
-
-    def test_init_no_reduce_action(self):
-        actionstr2id = self.actionstr2id.copy()
-        actionstr2id.pop('REDUCE')
-
-        with pytest.raises(ValueError) as excinfo:
-            DiscRNNG(self.word2id, self.pos2id, self.nt2id, actionstr2id)
-        assert 'no REDUCE action found in actionstr2id mapping' in str(excinfo.value)
-
-    def test_start(self):
-        words = 'John loves Mary'.split()
-        pos_tags = 'NNP VBZ NNP'.split()
-        parser = self.make_parser()
-
-        parser.start(words, pos_tags)
-
-        assert len(parser.stack_buffer) == 0
-        assert parser.input_buffer == words
-        assert len(parser.action_history) == 0
-        assert not parser.finished
-        assert parser.started
-
-    def test_start_with_unequal_words_and_pos_tags_length(self):
-        words = 'John loves'.split()
-        pos_tags = 'NNP VBZ NNP'.split()
-        parser = self.make_parser()
-        with pytest.raises(ValueError) as excinfo:
-            parser.start(words, pos_tags)
-        assert 'words and POS tags must have equal length' in str(excinfo.value)
-
-    def test_start_with_empty_words(self):
-        parser = self.make_parser()
-        with pytest.raises(ValueError) as excinfo:
-            parser.start([], [])
-        assert 'words cannot be empty' in str(excinfo.value)
-
-    def test_push_nt(self):
-        words = 'John loves Mary'.split()
-        pos_tags = 'NNP VBZ NNP'.split()
-        parser = self.make_parser()
-        parser.start(words, pos_tags)
-        prev_input_buffer = parser.input_buffer
-
-        parser.push_nt('S')
-
-        assert len(parser.stack_buffer) == 1
-        last = parser.stack_buffer[-1]
-        assert isinstance(last, Tree)
-        assert last.label() == 'S'
-        assert len(last) == 0
-        assert parser.input_buffer == prev_input_buffer
-        assert len(parser.action_history) == 1
-        assert parser.action_history[-1] == NTAction('S')
-        assert not parser.finished
-
-    def test_illegal_push_nt(self):
-        words = ['John']
-        pos_tags = ['NNP']
-        parser = self.make_parser()
-
-        # Buffer is empty
-        parser.start(words, pos_tags)
-        parser.push_nt('S')
-        parser.shift()
-        with pytest.raises(IllegalActionError) as excinfo:
-            parser.push_nt('NP')
-        assert 'cannot do NT(X) when input buffer is empty' in str(excinfo.value)
-
-        # More than 100 open nonterminals
-        parser.start(words, pos_tags)
-        for i in range(100):
-            parser.push_nt('S')
-        with pytest.raises(IllegalActionError) as excinfo:
-            parser.push_nt('NP')
-        assert 'max number of open nonterminals reached' in str(excinfo.value)
-
-    def test_shift(self):
-        words = 'John loves Mary'.split()
-        pos_tags = 'NNP VBZ NNP'.split()
-        parser = self.make_parser()
-        parser.start(words, pos_tags)
-        parser.push_nt('S')
-        parser.push_nt('NP')
-
-        parser.shift()
-
-        assert len(parser.stack_buffer) == 3
-        last = parser.stack_buffer[-1]
-        assert last == 'John'
-        assert parser.input_buffer == words[1:]
-        assert len(parser.action_history) == 3
-        assert parser.action_history[-1] == ShiftAction()
-        assert not parser.finished
-
-    def test_illegal_shift(self):
-        words = ['John']
-        pos_tags = ['NNP']
-        parser = self.make_parser()
-
-        # No open nonterminal
-        parser.start(words, pos_tags)
-        with pytest.raises(IllegalActionError) as excinfo:
-            parser.shift()
-        assert 'cannot SHIFT when no open nonterminal exist' in str(excinfo.value)
-
-        # Buffer is empty
-        parser.start(words, pos_tags)
-        parser.push_nt('S')
-        parser.shift()
-        with pytest.raises(IllegalActionError) as excinfo:
-            parser.shift()
-        assert 'cannot SHIFT when input buffer is empty' in str(excinfo.value)
-
-    def test_reduce(self):
-        words = 'John loves Mary'.split()
-        pos_tags = 'NNP VBZ NNP'.split()
-        parser = self.make_parser()
-        parser.start(words, pos_tags)
-        parser.push_nt('S')
-        parser.push_nt('NP')
-        parser.shift()
-        prev_input_buffer = parser.input_buffer
-
-        parser.reduce()
-
-        assert len(parser.stack_buffer) == 2
-        last = parser.stack_buffer[-1]
-        assert isinstance(last, Tree)
-        assert last.label() == 'NP'
-        assert len(last) == 1
-        assert last[0] == 'John'
-        assert parser.input_buffer == prev_input_buffer
-        assert len(parser.action_history) == 4
-        assert parser.action_history[-1] == ReduceAction()
-        assert not parser.finished
-
-    def test_illegal_reduce(self):
-        words = 'John loves'.split()
-        pos_tags = 'NNP VBZ'.split()
-        parser = self.make_parser()
-
-        # Top of stack is an open nonterminal
-        parser.start(words, pos_tags)
-        parser.push_nt('S')
-        with pytest.raises(IllegalActionError) as excinfo:
-            parser.reduce()
-        assert 'cannot REDUCE when top of stack is an open nonterminal' in str(excinfo.value)
-
-        # Buffer is not empty and REDUCE will finish parsing
-        parser.start(words, pos_tags)
-        parser.push_nt('S')
-        parser.shift()
-        with pytest.raises(IllegalActionError) as excinfo:
-            parser.reduce()
-        assert 'cannot REDUCE because there are words not SHIFT-ed yet' in str(excinfo.value)
-
-    def test_do_action_when_not_started(self):
-        parser = self.make_parser()
-
-        with pytest.raises(IllegalActionError) as excinfo:
-            parser.push_nt('S')
-        assert 'parser is not started yet, please call `start` first' in str(excinfo.value)
-
-        with pytest.raises(IllegalActionError) as excinfo:
-            parser.shift()
-        assert 'parser is not started yet, please call `start` first' in str(excinfo.value)
-
-        with pytest.raises(IllegalActionError) as excinfo:
-            parser.reduce()
-        assert 'parser is not started yet, please call `start` first' in str(excinfo.value)
-
     def test_forward(self):
-        words = 'John loves Mary'.split()
-        pos_tags = 'NNP VBZ NNP'.split()
-        actions = [
-            NTAction('S'),
-            NTAction('NP'),
-            ShiftAction(),
-            ReduceAction(),
-            NTAction('VP'),
-            ShiftAction(),
-            NTAction('NP'),
-            ShiftAction(),
-            ReduceAction(),
-            ReduceAction(),
-            ReduceAction(),
-        ]
+        words = self.make_words()
+        pos_tags = self.make_pos_tags()
+        actions = self.make_actions()
         parser = self.make_parser()
 
-        loss = parser(words, pos_tags, actions)
+        llh = parser(words, pos_tags, actions)
 
-        assert isinstance(loss, Variable)
-        assert loss.size() == (1,)
-        loss.backward()
-
-    def test_forward_with_illegal_actions(self):
-        words = 'John loves Mary'.split()
-        pos_tags = 'NNP VBZ NNP'.split()
-        actions = [ShiftAction()]
-        parser = self.make_parser()
-
-        loss = parser(words, pos_tags, actions)
-
-        assert (-loss).exp().data[0] == pytest.approx(0, abs=1e-7)
-
-    def test_finished(self):
-        words = 'John loves Mary'.split()
-        pos_tags = 'NNP VBZ NNP'.split()
-        parser = self.make_parser()
-        exp_parse_tree = Tree('S', [Tree('NP', ['John']),
-                                    Tree('VP', ['loves', Tree('NP', ['Mary'])])])
-
-        parser.start(words, pos_tags)
-        parser.push_nt('S')
-        parser.push_nt('NP')
-        parser.shift()
-        parser.reduce()
-        parser.push_nt('VP')
-        parser.shift()
-        parser.push_nt('NP')
-        parser.shift()
-        parser.reduce()
-        parser.reduce()
-        parser.reduce()
-
+        assert isinstance(llh, Variable)
+        assert llh.size() == (1,)
+        llh.backward()
         assert parser.finished
-        parse_tree = parser.stack_buffer[-1]
-        assert parse_tree == exp_parse_tree
 
-        with pytest.raises(IllegalActionError) as excinfo:
-            parser.push_nt('NP')
-        assert 'cannot do action when parser is finished' in str(excinfo.value)
+    def test_forward_with_shift_when_buffer_is_empty(self):
+        words = self.make_words()
+        pos_tags = self.make_pos_tags()
+        actions = self.make_actions([
+            NTAction('S'), ShiftAction(), ShiftAction(), ShiftAction(), ShiftAction()])
+        parser = self.make_parser()
+        llh = parser(words, pos_tags, actions)
+        assert llh.exp().data[0] == pytest.approx(0, abs=1e-7)
 
-        with pytest.raises(IllegalActionError) as excinfo:
-            parser.shift()
-        assert 'cannot do action when parser is finished' in str(excinfo.value)
+    def test_forward_with_shift_when_no_open_nt_in_the_stack(self):
+        words = self.make_words()
+        pos_tags = self.make_pos_tags()
+        actions = self.make_actions([ShiftAction()])
+        parser = self.make_parser()
+        llh = parser(words, pos_tags, actions)
+        assert llh.exp().data[0] == pytest.approx(0, abs=1e-7)
 
-        with pytest.raises(IllegalActionError) as excinfo:
-            parser.reduce()
-        assert 'cannot do action when parser is finished' in str(excinfo.value)
+    def test_forward_with_reduce_when_tos_is_an_open_nt(self):
+        words = self.make_words()
+        pos_tags = self.make_pos_tags()
+        actions = self.make_actions([NTAction('S'), ReduceAction()])
+        parser = self.make_parser()
+        llh = parser(words, pos_tags, actions)
+        assert llh.exp().data[0] == pytest.approx(0, abs=1e-7)
+
+    def test_forward_with_reduce_when_only_single_open_nt_and_buffer_is_not_empty(self):
+        words = self.make_words()
+        pos_tags = self.make_pos_tags()
+        actions = self.make_actions([NTAction('S'), ShiftAction(), ReduceAction()])
+        parser = self.make_parser()
+        llh = parser(words, pos_tags, actions)
+        assert llh.exp().data[0] == pytest.approx(0, abs=1e-7)
+
+    def test_forward_with_push_nt_when_buffer_is_empty(self):
+        words = self.make_words()
+        pos_tags = self.make_pos_tags()
+        actions = self.make_actions([
+            NTAction('S'), ShiftAction(), ShiftAction(), ShiftAction(), NTAction('NP')])
+        parser = self.make_parser()
+        llh = parser(words, pos_tags, actions)
+        assert llh.exp().data[0] == pytest.approx(0, abs=1e-7)
+
+    def test_forward_with_push_nt_when_maximum_number_of_open_nt_is_reached(self):
+        DiscRNNG.MAX_OPEN_NT = 2
+        words = self.make_words()
+        pos_tags = self.make_pos_tags()
+        actions = self.make_actions([NTAction('S')] * (DiscRNNG.MAX_OPEN_NT+1))
+        parser = self.make_parser()
+        llh = parser(words, pos_tags, actions)
+        assert llh.exp().data[0] == pytest.approx(0, abs=1e-7)
+
+    def test_forward_with_bad_dimensions(self):
+        words = Variable(torch.randn(2, 3)).long()
+        pos_tags = Variable(torch.randn(3)).long()
+        actions = Variable(torch.randn(5)).long()
+        parser = self.make_parser()
+        with pytest.raises(ValueError) as excinfo:
+            parser(words, pos_tags, actions)
+        assert 'expected words to have dimension of 1, got 2' in str(excinfo.value)
+
+        words = Variable(torch.randn(3)).long()
+        pos_tags = Variable(torch.randn(2, 3)).long()
+        with pytest.raises(ValueError) as excinfo:
+            parser(words, pos_tags, actions)
+        assert 'expected POS tags to have size equal to words' in str(excinfo.value)
+
+        words = Variable(torch.randn(3)).long()
+        pos_tags = Variable(torch.randn(3)).long()
+        actions = Variable(torch.randn(5, 3)).long()
+        with pytest.raises(ValueError) as excinfo:
+            parser(words, pos_tags, actions)
+        assert 'expected actions to have dimension of 1, got 2' in str(excinfo.value)
 
     def test_decode(self):
-        words = 'John loves Mary'.split()
-        pos_tags = 'NNP VBZ NNP'.split()
+        words = self.make_words()
+        pos_tags = self.make_pos_tags()
         parser = self.make_parser()
+
         best_action_ids = parser.decode(words, pos_tags)
-        id2actionstr = {v: k for k, v in parser.actionstr2id.items()}
 
         assert isinstance(best_action_ids, list)
-        parser.start(words, pos_tags)
-        for best_aid in best_action_ids:
-            log_probs = parser.compute_action_log_probs()
-            _, max_a = torch.max(log_probs, dim=0)
-            assert best_aid == max_a.data[0]
-            action = Action.from_string(id2actionstr[best_aid])
-            action.execute_on(parser)
         assert parser.finished

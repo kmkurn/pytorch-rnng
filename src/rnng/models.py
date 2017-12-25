@@ -1,6 +1,4 @@
-from typing import (Collection, List, Mapping, NamedTuple, Optional, Sequence, Sized, Tuple,
-                    Union, cast)
-from typing import Dict  # noqa
+from typing import Dict, List, NamedTuple, Optional, Sequence, Sized, Tuple, Union, cast
 
 from nltk.tree import Tree
 from torch.autograd import Variable
@@ -9,8 +7,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch.nn.init as init
 
-from rnng.actions import Action, ShiftAction, ReduceAction, NTAction
-from rnng.typing import Word, POSTag, NTLabel, WordId, POSId, NTId, ActionId
+from rnng.typing import WordId, NTId, ActionId
 
 
 class EmptyStackError(Exception):
@@ -116,23 +113,22 @@ def log_softmax(inputs: Variable, restrictions: Optional[torch.LongTensor] = Non
 
 
 class StackElement(NamedTuple):
-    subtree: Union[Word, Tree]
+    subtree: Union[WordId, Tree]
     emb: Variable
     is_open_nt: bool
-
-
-class IllegalActionError(Exception):
-    pass
 
 
 class DiscRNNG(nn.Module):
     MAX_OPEN_NT = 100
 
     def __init__(self,
-                 word2id: Mapping[Word, WordId],
-                 pos2id: Mapping[POSTag, POSId],
-                 nt2id: Mapping[NTLabel, NTId],
-                 actionstr2id: Mapping[str, ActionId],
+                 num_words: int,
+                 num_pos: int,
+                 num_nt: int,
+                 num_actions: int,
+                 shift_id: int,
+                 reduce_id: int,
+                 action2nt: Dict[ActionId, NTId],
                  word_embedding_size: int = 32,
                  pos_embedding_size: int = 12,
                  nt_embedding_size: int = 60,
@@ -142,16 +138,22 @@ class DiscRNNG(nn.Module):
                  num_layers: int = 2,
                  dropout: float = 0.,
                  ) -> None:
-        if str(ShiftAction()) not in actionstr2id:
-            raise ValueError(f'no {ShiftAction()} action found in actionstr2id mapping')
-        if str(ReduceAction()) not in actionstr2id:
-            raise ValueError(f'no {ReduceAction()} action found in actionstr2id mapping')
+        if shift_id == reduce_id:
+            raise ValueError('index of shift and reduce action cannot be equal')
+        if shift_id in action2nt or reduce_id in action2nt:
+            raise ValueError(
+                'index of shift or reduce action cannot occur in action2nt mapping')
+        if len(action2nt) + 2 != num_actions:
+            raise ValueError('not all NT actions are specified in action2nt mapping')
 
         super().__init__()
-        self.word2id = word2id
-        self.pos2id = pos2id
-        self.nt2id = nt2id
-        self.actionstr2id = actionstr2id
+        self.num_words = num_words
+        self.num_pos = num_pos
+        self.num_nt = num_nt
+        self.num_actions = num_actions
+        self.shift_id = shift_id
+        self.reduce_id = reduce_id
+        self.action2nt = action2nt
         self.word_embedding_size = word_embedding_size
         self.pos_embedding_size = pos_embedding_size
         self.nt_embedding_size = nt_embedding_size
@@ -163,10 +165,9 @@ class DiscRNNG(nn.Module):
 
         # Parser states
         self._stack = []  # type: List[StackElement]
-        self._buffer = []  # type: List[Word]
-        self._history = []  # type: List[Action]
+        self._buffer = []  # type: List[WordId]
+        self._history = []  # type: List[ActionId]
         self._num_open_nt = 0
-        self._started = False
 
         # Embeddings
         self.word_embedding = nn.Embedding(self.num_words, self.word_embedding_size)
@@ -222,48 +223,15 @@ class DiscRNNG(nn.Module):
 
         # Final embeddings
         self._word_emb = {}  # type: Dict[WordId, Variable]
-        self._nt_emb = None  # type: Variable
-        self._action_emb = None  # type: Variable
+        self._nt_emb = {}  # type: Dict[NTId, Variable]
+        self._action_emb = {}  # type: Dict[ActionId, Variable]
 
         self.reset_parameters()
 
     @property
-    def num_words(self) -> int:
-        return len(self.word2id)
-
-    @property
-    def num_pos(self) -> int:
-        return len(self.pos2id)
-
-    @property
-    def num_nt(self) -> int:
-        return len(self.nt2id)
-
-    @property
-    def num_actions(self) -> int:
-        return len(self.actionstr2id)
-
-    @property
-    def stack_buffer(self) -> List[Union[Tree, Word]]:
-        return [x.subtree for x in self._stack]
-
-    @property
-    def input_buffer(self) -> List[Word]:
-        return list(reversed(self._buffer))
-
-    @property
-    def action_history(self) -> List[Action]:
-        return list(self._history)
-
-    @property
     def finished(self) -> bool:
-        return (len(self._stack) == 1
-                and not self._stack[0].is_open_nt
-                and len(self._buffer) == 0)
-
-    @property
-    def started(self) -> bool:
-        return self._started
+        return len(self._stack) == 1 and not self._stack[0].is_open_nt \
+            and len(self._buffer) == 0
 
     def reset_parameters(self) -> None:
         # Embeddings
@@ -304,17 +272,81 @@ class DiscRNNG(nn.Module):
             guard = getattr(self, f'{name}_guard')
             init.constant(guard, 0.)
 
-    def start(self, words: Sequence[Word], pos_tags: Sequence[POSTag]) -> None:
-        if len(words) != len(pos_tags):
-            raise ValueError('words and POS tags must have equal length')
-        if len(words) == 0:
-            raise ValueError('words cannot be empty')
+    def forward(self,
+                words: Variable,
+                pos_tags: Variable,
+                actions: Variable) -> Variable:
+        if words.dim() != 1:
+            raise ValueError(f'expected words to have dimension of 1, got {words.dim()}')
+        if words.size() != pos_tags.size():
+            raise ValueError('expected POS tags to have size equal to words')
+        if actions is not None and actions.dim() != 1:
+            raise ValueError(f'expected actions to have dimension of 1, got {actions.dim()}')
+
+        self._start(words, pos_tags, actions=actions)
+        llh = 0.
+        for action in actions:
+            log_probs = self._compute_action_log_probs()
+            llh += log_probs[action]
+            action_id = action.data[0]
+            if action_id == self.shift_id:
+                if self._check_shift():
+                    self._shift()
+                else:
+                    break
+            elif action_id == self.reduce_id:
+                if self._check_reduce():
+                    self._reduce()
+                else:
+                    break
+            else:
+                if self._check_push_nt():
+                    self._push_nt(self.action2nt[action_id])
+                else:
+                    break
+            self._append_history(action_id)
+        return llh
+
+    def decode(self, words: Variable, pos_tags: Variable) -> List[ActionId]:
+        self._start(words, pos_tags)
+        while not self.finished:
+            log_probs = self._compute_action_log_probs()
+            max_action_id = torch.max(log_probs, dim=0)[1].data[0]
+            if max_action_id == self.shift_id:
+                if self._check_shift():
+                    self._shift()
+                else:
+                    raise RuntimeError('most probable action is an illegal one')
+            elif max_action_id == self.reduce_id:
+                if self._check_reduce():
+                    self._reduce()
+                else:
+                    raise RuntimeError('most probable action is an illegal one')
+            else:
+                if self._check_push_nt():
+                    self._push_nt(self.action2nt[max_action_id])
+                else:
+                    raise RuntimeError('most probable action is an illegal one')
+            self._append_history(max_action_id)
+        return list(self._history)
+
+    def _start(self,
+               words: Variable,
+               pos_tags: Variable,
+               actions: Optional[Variable] = None) -> None:
+        # words: (seq_length,)
+        # pos_tags: (seq_length,)
+        # actions: (action_seq_length,)
+
+        assert words.dim() == 1
+        assert words.size() == pos_tags.size()
+        if actions is not None:
+            assert actions.dim() == 1
 
         self._stack = []
         self._buffer = []
         self._history = []
         self._num_open_nt = 0
-        self._started = False
 
         while len(self.stack_encoder) > 0:
             self.stack_encoder.pop()
@@ -329,138 +361,103 @@ class DiscRNNG(nn.Module):
         self.history_encoder.push(self.history_guard)
 
         # Initialize input buffer and its LSTM encoder
-        self._prepare_embeddings(words, pos_tags)
-        for word in reversed(words):
-            self._buffer.append(word)
-            wid = self.word2id[word]
-            assert wid in self._word_emb
-            self.buffer_encoder.push(self._word_emb[wid])
-        self._started = True
+        self._prepare_embeddings(words, pos_tags, actions=actions)
+        for word_id in reversed(words.data.tolist()):
+            self._buffer.append(word_id)
+            assert word_id in self._word_emb
+            self.buffer_encoder.push(self._word_emb[word_id])
 
-    def forward(self,
-                words: Sequence[Word],
-                pos_tags: Sequence[POSTag],
-                actions: Sequence[Action]) -> Variable:
-        self.start(words, pos_tags)
-        llh = 0.
-        for action in actions:
-            log_probs = self.compute_action_log_probs()
-            llh += log_probs[self.actionstr2id[str(action)]]
-            try:
-                action.execute_on(self)
-            except IllegalActionError:
-                break
-        return -llh
+    def _prepare_embeddings(self,
+                            words: Variable,
+                            pos_tags: Variable,
+                            actions: Optional[Variable] = None) -> None:
+        # words: (seq_length,)
+        # pos_tags: (seq_length,)
+        # actions: (action_seq_length,)
 
-    def decode(self, words: Sequence[Word], pos_tags: Sequence[POSTag]) -> List[ActionId]:
-        self.start(words, pos_tags)
-        id2actionstr = {v: k for k, v in self.actionstr2id.items()}
-        best_action_ids = []
-        while not self.finished:
-            log_probs = self.compute_action_log_probs()
-            max_a = torch.max(log_probs, dim=0)[1].data[0]
-            best_action_ids.append(max_a)
-            action = Action.from_string(id2actionstr[max_a])
-            action.execute_on(self)
-        return best_action_ids
+        assert words.dim() == 1
+        assert words.size() == pos_tags.size()
+        if actions is not None:
+            assert actions.dim() == 1
 
-    def push_nt(self, nonterm: NTLabel) -> None:
-        action = NTAction(nonterm)
-        self.verify_push_nt()
-        self._push_nt(nonterm)
-        self._append_history(action)
+        if actions is None:
+            actions = Variable(
+                self._new(range(self.num_actions)), volatile=not self.training).long()
+        nonterms = Variable(
+            self._new(range(self.num_nt)), volatile=not self.training).long()
 
-    def shift(self) -> None:
-        self.verify_shift()
-        self._shift()
-        self._append_history(ShiftAction())
-
-    def reduce(self) -> None:
-        self.verify_reduce()
-        self._reduce()
-        self._append_history(ReduceAction())
-
-    def verify_push_nt(self) -> None:
-        self._verify_action()
-        if len(self._buffer) == 0:
-            raise IllegalActionError('cannot do NT(X) when input buffer is empty')
-        if self._num_open_nt >= self.MAX_OPEN_NT:
-            raise IllegalActionError('max number of open nonterminals reached')
-
-    def verify_shift(self) -> None:
-        self._verify_action()
-        if len(self._buffer) == 0:
-            raise IllegalActionError('cannot SHIFT when input buffer is empty')
-        if self._num_open_nt == 0:
-            raise IllegalActionError('cannot SHIFT when no open nonterminal exists')
-
-    def verify_reduce(self) -> None:
-        self._verify_action()
-        last_is_nt = len(self._history) > 0 and isinstance(self._history[-1], NTAction)
-        if last_is_nt:
-            raise IllegalActionError(
-                'cannot REDUCE when top of stack is an open nonterminal')
-        if self._num_open_nt < 2 and len(self._buffer) > 0:
-            raise IllegalActionError(
-                'cannot REDUCE because there are words not SHIFT-ed yet')
-
-    def _prepare_embeddings(self, words: Collection[Word], pos_tags: Collection[POSTag]):
-        assert len(words) == len(pos_tags)
-
-        word_ids = [self.word2id[w] for w in words]
-        pos_ids = [self.pos2id[p] for p in pos_tags]
-        nt_ids = list(range(self.num_nt))
-        action_ids = list(range(self.num_actions))
-
-        volatile = not self.training
-        word_indices = Variable(self._new(word_ids).long().view(1, -1), volatile=volatile)
-        pos_indices = Variable(self._new(pos_ids).long().view(1, -1), volatile=volatile)
-        nt_indices = Variable(self._new(nt_ids).long().view(1, -1), volatile=volatile)
-        action_indices = Variable(self._new(action_ids).long().view(1, -1), volatile=volatile)
-
-        word_embs = self.word_embedding(word_indices).view(-1, self.word_embedding_size)
-        pos_embs = self.pos_embedding(pos_indices).view(-1, self.pos_embedding_size)
-        nt_embs = self.nt_embedding(nt_indices).view(-1, self.nt_embedding_size)
-        action_embs = self.action_embedding(action_indices).view(-1, self.action_embedding_size)
+        word_embs = self.word_embedding(
+            words.view(1, -1)).view(-1, self.word_embedding_size)
+        pos_embs = self.pos_embedding(
+            pos_tags.view(1, -1)).view(-1, self.pos_embedding_size)
+        nt_embs = self.nt_embedding(
+            nonterms.view(1, -1)).view(-1, self.nt_embedding_size)
+        action_embs = self.action_embedding(
+            actions.view(1, -1)).view(-1, self.action_embedding_size)
 
         final_word_embs = self.word2encoder(torch.cat([word_embs, pos_embs], dim=1))
         final_nt_embs = self.nt2encoder(nt_embs)
         final_action_embs = self.action2encoder(action_embs)
 
-        self._word_emb = dict(zip(word_ids, final_word_embs))
-        self._nt_emb = final_nt_embs
-        self._action_emb = final_action_embs
+        self._word_emb = dict(zip(words.data.tolist(), final_word_embs))
+        self._nt_emb = dict(zip(nonterms.data.tolist(), final_nt_embs))
+        self._action_emb = dict(zip(actions.data.tolist(), final_action_embs))
 
-    def _verify_action(self) -> None:
-        if not self._started:
-            raise IllegalActionError('parser is not started yet, please call `start` first')
-        if self.finished:
-            raise IllegalActionError('cannot do action when parser is finished')
+    def _compute_action_log_probs(self) -> Variable:
+        assert self.stack_encoder.top is not None
+        assert self.buffer_encoder.top is not None
+        assert self.history_encoder.top is not None
 
-    def _append_history(self, action: Action) -> None:
-        self._history.append(action)
-        aid = self.actionstr2id[str(action)]
-        assert isinstance(self._action_emb, Variable)
-        self.history_encoder.push(self._action_emb[aid])
+        concatenated = torch.cat([
+            self.stack_encoder.top, self.buffer_encoder.top, self.history_encoder.top
+        ]).view(1, -1)
+        summary = self.encoders2summary(concatenated)
+        illegal_actions = self._get_illegal_actions()
+        return log_softmax(
+            self.summary2actionlogprobs(summary),
+            restrictions=illegal_actions
+        ).view(-1)
 
-    def _push_nt(self, nonterm: NTLabel) -> None:
-        nid = self.nt2id[nonterm]
-        assert isinstance(self._nt_emb, Variable)
+    def _check_push_nt(self) -> bool:
+        return len(self._buffer) > 0 and self._num_open_nt < self.MAX_OPEN_NT
+
+    def _check_shift(self) -> bool:
+        return len(self._buffer) > 0 and self._num_open_nt > 0
+
+    def _check_reduce(self) -> bool:
+        tos_is_open_nt = len(self._stack) > 0 and self._stack[-1].is_open_nt
+        return self._num_open_nt > 0 and not tos_is_open_nt \
+            and not (self._num_open_nt < 2 and len(self._buffer) > 0)
+
+    def _append_history(self, action_id: ActionId) -> None:
+        assert action_id in self._action_emb
+
+        self._history.append(action_id)
+        self.history_encoder.push(self._action_emb[action_id])
+
+    def _push_nt(self, nt_id: NTId) -> None:
+        assert self._check_push_nt()
+        assert nt_id in self._nt_emb
+
         self._stack.append(
-            StackElement(Tree(nonterm, []), self._nt_emb[nid], True))
-        self.stack_encoder.push(self._nt_emb[nid])
+            StackElement(Tree(nt_id, []), self._nt_emb[nt_id], True))
+        self.stack_encoder.push(self._nt_emb[nt_id])
         self._num_open_nt += 1
 
     def _shift(self) -> None:
+        assert self._check_shift()
         assert len(self._buffer) > 0
         assert len(self.buffer_encoder) > 0
-        word = self._buffer.pop()
+        assert self._buffer[-1] in self._word_emb
+
+        word_id = self._buffer.pop()
         self.buffer_encoder.pop()
-        wid = self.word2id[word]
-        self._stack.append(StackElement(word, self._word_emb[wid], False))
-        self.stack_encoder.push(self._word_emb[wid])
+        self._stack.append(StackElement(word_id, self._word_emb[word_id], False))
+        self.stack_encoder.push(self._word_emb[word_id])
 
     def _reduce(self) -> None:
+        assert self._check_reduce()
+
         children = []
         while len(self._stack) > 0 and not self._stack[-1].is_open_nt:
             children.append(self._stack.pop()[:-1])
@@ -500,41 +497,20 @@ class DiscRNNG(nn.Module):
         # (input_size,)
         return self.fwdbwd2composed(torch.cat([fwd_emb, bwd_emb]).view(1, -1)).view(-1)
 
-    def compute_action_log_probs(self):
-        if not self._started:
-            raise RuntimeError('parser is not started yet, please call `start` first')
-
-        encoder_embs = [
-            self.stack_encoder.top, self.buffer_encoder.top, self.history_encoder.top
-        ]
-        assert all(emb is not None for emb in encoder_embs)
-        # (1, 3 * hidden_size)
-        concatenated = torch.cat(encoder_embs).view(1, -1)
-        # (1, hidden_size)
-        parser_summary = self.encoders2summary(concatenated)
-        illegal_action_ids = self._get_illegal_action_ids()
-        # (num_actions,)
-        return log_softmax(
-            self.summary2actionlogprobs(parser_summary),
-            restrictions=illegal_action_ids
-        ).view(-1)
-
-    def _get_illegal_action_ids(self) -> Optional[torch.LongTensor]:
+    def _get_illegal_actions(self) -> Optional[torch.LongTensor]:
         illegal_action_ids = [
-            aid for astr, aid in self.actionstr2id.items() if not self._is_legal(astr)
+            action_id for action_id in range(self.num_actions) if not self._is_legal(action_id)
         ]
         if not illegal_action_ids:
             return None
         return self._new(illegal_action_ids).long()
 
-    def _is_legal(self, astr: str) -> bool:
-        action = Action.from_string(astr)
-        try:
-            action.verify_on(self)
-        except IllegalActionError:
-            return False
-        else:
-            return True
+    def _is_legal(self, action_id: int) -> bool:
+        if action_id == self.shift_id:
+            return self._check_shift()
+        if action_id == self.reduce_id:
+            return self._check_reduce()
+        return self._check_push_nt()
 
     def _new(self, *args, **kwargs) -> torch.FloatTensor:
         return next(self.parameters()).data.new(*args, **kwargs)

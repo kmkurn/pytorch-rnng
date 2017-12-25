@@ -19,10 +19,6 @@ class Action(metaclass=abc.ABCMeta):
     def __str__(self) -> str:
         pass
 
-    @abc.abstractmethod
-    def execute_on(self, parser) -> None:
-        pass
-
     @classmethod
     @abc.abstractmethod
     def from_string(cls, line: str) -> 'Action':
@@ -33,10 +29,6 @@ class Action(metaclass=abc.ABCMeta):
                 pass  # continue to next subclass
         else:
             raise ValueError(f'no action found from string {line}')
-
-    @abc.abstractmethod
-    def verify_on(self, parser) -> None:
-        pass
 
 
 class ShiftAction(Action):
@@ -49,18 +41,12 @@ class ShiftAction(Action):
     def __str__(self) -> str:
         return 'SHIFT'
 
-    def execute_on(self, parser) -> None:
-        parser.shift()
-
     @classmethod
     def from_string(cls, line: str) -> 'ShiftAction':
         if line != 'SHIFT':
             raise ValueError('invalid string value for SHIFT action')
         else:
             return cls()
-
-    def verify_on(self, parser) -> None:
-        parser.verify_shift()
 
 
 class ReduceAction(Action):
@@ -73,18 +59,12 @@ class ReduceAction(Action):
     def __str__(self) -> str:
         return 'REDUCE'
 
-    def execute_on(self, parser) -> None:
-        parser.reduce()
-
     @classmethod
     def from_string(cls, line: str) -> 'ReduceAction':
         if line != 'REDUCE':
             raise ValueError('invalid string value for REDUCE action')
         else:
             return cls()
-
-    def verify_on(self, parser) -> None:
-        parser.verify_reduce()
 
 
 class NTAction(Action):
@@ -100,18 +80,12 @@ class NTAction(Action):
     def __str__(self) -> str:
         return f'NT({self.label})'
 
-    def execute_on(self, parser) -> None:
-        parser.push_nt(self.label)
-
     @classmethod
     def from_string(cls, line: str) -> 'NTAction':
         if not line.startswith('NT(') or not line.endswith(')'):
             raise ValueError('invalid string value for NT(X) action')
         else:
             return cls(line[3:-1])
-
-    def verify_on(self, parser) -> None:
-        parser.verify_push_nt()
 
 
 class GenAction(Action):
@@ -127,15 +101,9 @@ class GenAction(Action):
     def __str__(self) -> str:
         return f'GEN({self.word})'
 
-    def execute_on(self, parser) -> None:
-        raise NotImplementedError('generative RNNG is not implemented yet')
-
     @classmethod
     def from_string(cls, line: str) -> 'GenAction':
         if not line.startswith('GEN(') or not line.endswith(')'):
             raise ValueError('invalid string value for GEN(w) action')
         else:
             return cls(line[4:-1])
-
-    def verify_on(self, parser) -> None:
-        raise NotImplementedError('generative RNNG is not implemented yet')
