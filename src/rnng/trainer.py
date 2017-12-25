@@ -13,7 +13,7 @@ import torch
 import torch.optim as optim
 import torchnet as tnt
 
-from rnng.actions import Action, NTAction, ReduceAction, ShiftAction
+from rnng.actions import NTAction, ReduceAction, ShiftAction
 from rnng.example import make_example
 from rnng.iterator import SimpleIterator
 from rnng.models import DiscRNNG
@@ -84,10 +84,6 @@ class Trainer(object):
         self.epoch_timer = tnt.meter.TimeMeter(None)
         self.train_timer = tnt.meter.TimeMeter(None)
         self.engine = tnt.engine.Engine()
-
-    def reset_meters(self):
-        self.loss_meter.reset()
-        self.speed_meter.reset()
 
     def set_random_seed(self):
         self.logger.info('Setting random seed to %d', self.seed)
@@ -167,19 +163,10 @@ class Trainer(object):
         self.logger.info('Saving model metadata to %s', self.model_metadata_path)
         with open(self.model_metadata_path, 'w') as f:
             json.dump({'args': model_args, 'kwargs': model_kwargs}, f, sort_keys=True, indent=2)
-        self.logger.info('Saving initial model parameters to %s', self.model_params_path)
-        torch.save(self.model.state_dict(), self.model_params_path)
+        self.save_model()
 
     def build_optimizer(self):
         self.optimizer = optim.Adam(self.model.parameters(), lr=self.learning_rate)
-
-    def save_artifacts(self):
-        self.logger.info('Saving training artifacts to %s', self.artifacts_path)
-        with tarfile.open(self.artifacts_path, 'w:gz') as f:
-            artifact_names = 'fields_dict model_metadata model_params'.split()
-            for name in artifact_names:
-                path = getattr(self, f'{name}_path')
-                f.add(path, arcname=os.path.basename(path))
 
     def run(self):
         self.set_random_seed()
@@ -243,10 +230,8 @@ class Trainer(object):
         speed, _ = self.speed_meter.value()
         self.logger.info('Epoch %d done (%.4fs): %.2f samples/sec | loss %.4f',
                          epoch, elapsed_time, speed, loss)
-        if self.dev_iterator is None:
-            self.logger.info('Saving model parameters to %s', self.model_params_path)
-            torch.save(self.model.state_dict(), self.model_params_path)
-        else:
+        self.save_model()
+        if self.dev_iterator is not None:
             self.engine.test(self.network, self.dev_iterator)
             loss, _ = self.loss_meter.value()
             speed, _ = self.speed_meter.value()
@@ -265,3 +250,19 @@ class Trainer(object):
         oracles = [DiscOracle.from_parsed_sent(s) for s in reader.parsed_sents()]
         examples = [make_example(x, self.fields) for x in oracles]
         return Dataset(examples, self.fields)
+
+    def reset_meters(self):
+        self.loss_meter.reset()
+        self.speed_meter.reset()
+
+    def save_artifacts(self):
+        self.logger.info('Saving training artifacts to %s', self.artifacts_path)
+        with tarfile.open(self.artifacts_path, 'w:gz') as f:
+            artifact_names = 'fields_dict model_metadata model_params'.split()
+            for name in artifact_names:
+                path = getattr(self, f'{name}_path')
+                f.add(path, arcname=os.path.basename(path))
+
+    def save_model(self):
+        self.logger.info('Saving model parameters to %s', self.model_params_path)
+        torch.save(self.model.state_dict(), self.model_params_path)
