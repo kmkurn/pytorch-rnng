@@ -1,3 +1,4 @@
+import collections
 import json
 import logging
 import os
@@ -6,6 +7,7 @@ import tarfile
 
 from nltk.corpus.reader import BracketParseCorpusReader
 from torchtext.data import Dataset, Field
+from torchtext.vocab import Vocab
 import dill
 import torch
 import torch.optim as optim
@@ -124,10 +126,14 @@ class Trainer(object):
 
     def build_vocabularies(self):
         self.logger.info('Building vocabularies')
-        self.ACTIONS.build_vocab(self.train_dataset)
-        self.NONTERMS.build_vocab(self.train_dataset)
-        self.POS_TAGS.build_vocab(self.train_dataset)
         self.WORDS.build_vocab(self.train_dataset, min_freq=self.min_freq)
+        self.POS_TAGS.build_vocab(self.train_dataset)
+        self.NONTERMS.build_vocab(self.train_dataset)
+        specials = [str(ReduceAction()), str(ShiftAction())]
+        for nonterm in self.NONTERMS.vocab.stoi:
+            specials.append(str(NTAction(nonterm)))
+        self.ACTIONS.build_vocab()
+        self.ACTIONS.vocab = Vocab(collections.Counter(), specials=specials)
 
         self.num_words = len(self.WORDS.vocab)
         self.num_pos = len(self.POS_TAGS.vocab)
@@ -142,16 +148,8 @@ class Trainer(object):
 
     def build_model(self):
         self.logger.info('Building model')
-        action2nt = {}
-        for action_id, actionstr in enumerate(self.ACTIONS.vocab.itos):
-            action = Action.from_string(actionstr)
-            if isinstance(action, NTAction):
-                action2nt[action_id] = self.NONTERMS.vocab.stoi[action.label]
         model_args = (
-            self.num_words, self.num_pos, self.num_nt, self.num_actions,
-            self.ACTIONS.vocab.stoi[str(ShiftAction())],
-            self.ACTIONS.vocab.stoi[str(ReduceAction())],
-            action2nt)
+            self.num_words, self.num_pos, self.num_nt)
         model_kwargs = dict(
             word_embedding_size=self.word_embedding_size,
             pos_embedding_size=self.pos_embedding_size,

@@ -201,18 +201,14 @@ def test_log_softmax_with_invalid_restrictions_dimension():
 class TestDiscRNNG(object):
     word2id = {'John': 0, 'loves': 1, 'Mary': 2}
     pos2id = {'NNP': 0, 'VBZ': 1}
-    nt2id = {'S': 2, 'NP': 1, 'VP': 0}
-    actionstr2id = {'NT(S)': 0, 'NT(NP)': 1, 'NT(VP)': 2, 'SHIFT': 3, 'REDUCE': 4}
+    nt2id = {'S': 0, 'NP': 1, 'VP': 2}
     num_words = len(word2id)
     num_pos = len(pos2id)
     num_nt = len(nt2id)
-    num_actions = len(actionstr2id)
-    action2nt = {0: 2, 1: 1, 2: 0}
 
     def make_parser(self):
         return DiscRNNG(
-            self.num_words, self.num_pos, self.num_nt, self.num_actions,
-            self.actionstr2id['SHIFT'], self.actionstr2id['REDUCE'], self.action2nt)
+            self.num_words, self.num_pos, self.num_nt)
 
     def make_words(self, words=None):
         if words is None:
@@ -240,21 +236,24 @@ class TestDiscRNNG(object):
                 ReduceAction(),
             ]
 
-        return Variable(torch.LongTensor([self.actionstr2id[str(x)] for x in actions]))
+        return Variable(torch.LongTensor([self.action2id(x) for x in actions]))
+
+    def action2id(self, action):
+        if isinstance(action, ReduceAction):
+            return 0
+        if isinstance(action, ShiftAction):
+            return 1
+        return self.nt2id[action.label] + 2
 
     def test_init_minimal(self):
         parser = DiscRNNG(
-            self.num_words, self.num_pos, self.num_nt, self.num_actions,
-            self.actionstr2id['SHIFT'], self.actionstr2id['REDUCE'], self.action2nt)
+            self.num_words, self.num_pos, self.num_nt)
 
         # Attributes
         assert parser.num_words == self.num_words
         assert parser.num_pos == self.num_pos
         assert parser.num_nt == self.num_nt
-        assert parser.num_actions == self.num_actions
-        assert parser.shift_id == self.actionstr2id['SHIFT']
-        assert parser.reduce_id == self.actionstr2id['REDUCE']
-        assert parser.action2nt == self.action2nt
+        assert parser.num_actions == self.num_nt + 2
         assert parser.word_embedding_size == 32
         assert parser.pos_embedding_size == 12
         assert parser.nt_embedding_size == 60
@@ -369,9 +368,7 @@ class TestDiscRNNG(object):
             dropout=0.5,
         )
         parser = DiscRNNG(
-            self.num_words, self.num_pos, self.num_nt, self.num_actions,
-            self.actionstr2id['SHIFT'], self.actionstr2id['REDUCE'], self.action2nt, **kwargs
-        )
+            self.num_words, self.num_pos, self.num_nt, **kwargs)
 
         for key, value in kwargs.items():
             assert getattr(parser, key) == value

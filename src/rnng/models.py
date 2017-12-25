@@ -120,15 +120,13 @@ class StackElement(NamedTuple):
 
 class DiscRNNG(nn.Module):
     MAX_OPEN_NT = 100
+    REDUCE_ID = 0
+    SHIFT_ID = 1
 
     def __init__(self,
                  num_words: int,
                  num_pos: int,
                  num_nt: int,
-                 num_actions: int,
-                 shift_id: int,
-                 reduce_id: int,
-                 action2nt: Dict[ActionId, NTId],
                  word_embedding_size: int = 32,
                  pos_embedding_size: int = 12,
                  nt_embedding_size: int = 60,
@@ -138,22 +136,10 @@ class DiscRNNG(nn.Module):
                  num_layers: int = 2,
                  dropout: float = 0.,
                  ) -> None:
-        if shift_id == reduce_id:
-            raise ValueError('index of shift and reduce action cannot be equal')
-        if shift_id in action2nt or reduce_id in action2nt:
-            raise ValueError(
-                'index of shift or reduce action cannot occur in action2nt mapping')
-        if len(action2nt) + 2 != num_actions:
-            raise ValueError('not all NT actions are specified in action2nt mapping')
-
         super().__init__()
         self.num_words = num_words
         self.num_pos = num_pos
         self.num_nt = num_nt
-        self.num_actions = num_actions
-        self.shift_id = shift_id
-        self.reduce_id = reduce_id
-        self.action2nt = action2nt
         self.word_embedding_size = word_embedding_size
         self.pos_embedding_size = pos_embedding_size
         self.nt_embedding_size = nt_embedding_size
@@ -229,6 +215,10 @@ class DiscRNNG(nn.Module):
         self.reset_parameters()
 
     @property
+    def num_actions(self) -> int:
+        return self.num_nt + 2
+
+    @property
     def finished(self) -> bool:
         return len(self._stack) == 1 and not self._stack[0].is_open_nt \
             and len(self._buffer) == 0
@@ -289,19 +279,19 @@ class DiscRNNG(nn.Module):
             log_probs = self._compute_action_log_probs()
             llh += log_probs[action]
             action_id = action.data[0]
-            if action_id == self.shift_id:
+            if action_id == self.SHIFT_ID:
                 if self._check_shift():
                     self._shift()
                 else:
                     break
-            elif action_id == self.reduce_id:
+            elif action_id == self.REDUCE_ID:
                 if self._check_reduce():
                     self._reduce()
                 else:
                     break
             else:
                 if self._check_push_nt():
-                    self._push_nt(self.action2nt[action_id])
+                    self._push_nt(self._get_nt(action_id))
                 else:
                     break
             self._append_history(action_id)
@@ -312,19 +302,19 @@ class DiscRNNG(nn.Module):
         while not self.finished:
             log_probs = self._compute_action_log_probs()
             max_action_id = torch.max(log_probs, dim=0)[1].data[0]
-            if max_action_id == self.shift_id:
+            if max_action_id == self.SHIFT_ID:
                 if self._check_shift():
                     self._shift()
                 else:
                     raise RuntimeError('most probable action is an illegal one')
-            elif max_action_id == self.reduce_id:
+            elif max_action_id == self.REDUCE_ID:
                 if self._check_reduce():
                     self._reduce()
                 else:
                     raise RuntimeError('most probable action is an illegal one')
             else:
                 if self._check_push_nt():
-                    self._push_nt(self.action2nt[max_action_id])
+                    self._push_nt(self._get_nt(max_action_id))
                 else:
                     raise RuntimeError('most probable action is an illegal one')
             self._append_history(max_action_id)
@@ -506,11 +496,15 @@ class DiscRNNG(nn.Module):
         return self._new(illegal_action_ids).long()
 
     def _is_legal(self, action_id: int) -> bool:
-        if action_id == self.shift_id:
+        if action_id == self.SHIFT_ID:
             return self._check_shift()
-        if action_id == self.reduce_id:
+        if action_id == self.REDUCE_ID:
             return self._check_reduce()
         return self._check_push_nt()
+
+    def _get_nt(self, action_id: int) -> int:
+        assert action_id >= 2
+        return action_id - 2
 
     def _new(self, *args, **kwargs) -> torch.FloatTensor:
         return next(self.parameters()).data.new(*args, **kwargs)
