@@ -33,7 +33,7 @@ class TestDiscOracle:
             DiscOracle(actions, pos_tags, words)
         assert 'number of POS tags should match number of words' in str(excinfo.value)
 
-    def test_from_parsed_sent(self):
+    def test_from_tree(self):
         s = '(S (NP (NNP John)) (VP (VBZ loves) (NP (NNP Mary))))'
         expected_actions = [
             NT('S'),
@@ -51,12 +51,34 @@ class TestDiscOracle:
         expected_pos_tags = ['NNP', 'VBZ', 'NNP']
         expected_words = ['John', 'loves', 'Mary']
 
-        oracle = DiscOracle.from_parsed_sent(Tree.fromstring(s))
+        oracle = DiscOracle.from_tree(Tree.fromstring(s))
 
         assert isinstance(oracle, DiscOracle)
         assert oracle.actions == expected_actions
         assert oracle.pos_tags == expected_pos_tags
         assert oracle.words == expected_words
+
+    def test_to_tree(self):
+        s = '(S (NP (NNP John)) (VP (VBZ loves) (NP (NNP Mary))))'
+        actions = [
+            NT('S'),
+            NT('NP'),
+            SHIFT,
+            REDUCE,
+            NT('VP'),
+            SHIFT,
+            NT('NP'),
+            SHIFT,
+            REDUCE,
+            REDUCE,
+            REDUCE,
+        ]
+        pos_tags = ['NNP', 'VBZ', 'NNP']
+        words = ['John', 'loves', 'Mary']
+
+        oracle = DiscOracle(actions, pos_tags, words)
+
+        assert str(oracle.to_tree()) == s
 
 
 class TestGenOracle:
@@ -67,7 +89,7 @@ class TestGenOracle:
             GenOracle(actions, pos_tags)
         assert 'number of POS tags should match number of GEN actions' in str(excinfo.value)
 
-    def test_from_parsed_sent(self):
+    def test_from_tree(self):
         s = '(S (NP (NNP John)) (VP (VBZ loves) (NP (NNP Mary))))'
         expected_actions = [
             NT('S'),
@@ -85,9 +107,30 @@ class TestGenOracle:
         expected_words = ['John', 'loves', 'Mary']
         expected_pos_tags = ['NNP', 'VBZ', 'NNP']
 
-        oracle = GenOracle.from_parsed_sent(Tree.fromstring(s))
+        oracle = GenOracle.from_tree(Tree.fromstring(s))
 
         assert isinstance(oracle, GenOracle)
         assert oracle.actions == expected_actions
         assert oracle.words == expected_words
         assert oracle.pos_tags == expected_pos_tags
+
+    def test_to_tree(self):
+        s = '(S (NP (NNP John)) (VP (VBZ loves) (NP (NNP Mary))))'
+        actions = [
+            NT('S'),
+            NT('NP'),
+            GEN('John'),
+            REDUCE,
+            NT('VP'),
+            GEN('loves'),
+            NT('NP'),
+            GEN('Mary'),
+            REDUCE,
+            REDUCE,
+            REDUCE,
+        ]
+        pos_tags = ['NNP', 'VBZ', 'NNP']
+
+        oracle = GenOracle(actions, pos_tags)
+
+        assert str(oracle.to_tree()) == s

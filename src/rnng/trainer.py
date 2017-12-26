@@ -243,7 +243,7 @@ class Trainer(object):
     def make_dataset(self, corpus: str) -> Dataset:
         reader = BracketParseCorpusReader(
             *os.path.split(corpus), encoding=self.encoding, detect_blocks='sexpr')
-        oracles = [DiscOracle.from_parsed_sent(s) for s in reader.parsed_sents()]
+        oracles = [DiscOracle.from_tree(t) for t in reader.parsed_sents()]
         examples = [make_example(x, self.fields) for x in oracles]
         return Dataset(examples, self.fields)
 

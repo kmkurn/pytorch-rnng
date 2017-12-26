@@ -3,7 +3,7 @@ import abc
 
 from nltk.tree import Tree
 
-from rnng.actions import GEN, NT, REDUCE, SHIFT, get_word, is_gen
+from rnng.actions import GEN, NT, REDUCE, SHIFT, get_nonterm, get_word, is_gen, is_nt
 from rnng.typing import Action, POSTag, Word
 
 
@@ -23,9 +23,33 @@ class Oracle(metaclass=abc.ABCMeta):
     def words(self) -> List[Word]:
         pass
 
+    def to_tree(self) -> Tree:
+        stack = []
+        pos_tags = list(reversed(self.pos_tags))
+        words = list(reversed(self.words))
+        for a in self.actions:
+            if is_nt(a):
+                stack.append(get_nonterm(a))
+            elif a == REDUCE:
+                children = []
+                while stack and isinstance(stack[-1], Tree):
+                    children.append(stack.pop())
+                if not children or not stack:
+                    raise ValueError(
+                        f'invalid {REDUCE} action, please check if the actions are correct')
+                parent = stack.pop()
+                tree = Tree(parent, list(reversed(children)))
+                stack.append(tree)
+            else:
+                tree = Tree(pos_tags.pop(), [words.pop()])
+                stack.append(tree)
+        if len(stack) != 1:
+            raise ValueError('actions do not produce a single parse tree')
+        return stack[0]
+
     @classmethod
     @abc.abstractmethod
-    def from_parsed_sent(cls, parsed_sent: Tree):
+    def from_tree(cls, tree: Tree):
         pass
 
     @classmethod
@@ -73,9 +97,9 @@ class DiscOracle(Oracle):
         return list(self._words)
 
     @classmethod
-    def from_parsed_sent(cls, parsed_sent: Tree) -> 'DiscOracle':
-        actions = cls.get_actions(parsed_sent)
-        words, pos_tags = zip(*parsed_sent.pos())
+    def from_tree(cls, tree: Tree) -> 'DiscOracle':
+        actions = cls.get_actions(tree)
+        words, pos_tags = zip(*tree.pos())
         return cls(actions, list(pos_tags), list(words))
 
     @classmethod
@@ -107,9 +131,9 @@ class GenOracle(Oracle):
         return [get_word(a) for a in self.actions if is_gen(a)]
 
     @classmethod
-    def from_parsed_sent(cls, parsed_sent: Tree) -> 'GenOracle':
-        actions = cls.get_actions(parsed_sent)
-        _, pos_tags = zip(*parsed_sent.pos())
+    def from_tree(cls, tree: Tree) -> 'GenOracle':
+        actions = cls.get_actions(tree)
+        _, pos_tags = zip(*tree.pos())
         return cls(actions, list(pos_tags))
 
     @classmethod
