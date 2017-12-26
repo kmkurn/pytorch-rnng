@@ -1,107 +1,55 @@
 import pytest
 
-from rnng.actions import Action, ShiftAction, ReduceAction, NTAction, GenAction
+from rnng.actions import GEN, NT, REDUCE, SHIFT, get_nonterm, get_word, is_gen, is_nt
 
 
-def test_action_from_invalid_string():
+def test_reduce_action():
+    assert REDUCE == 'REDUCE'
+
+
+def test_shift_action():
+    assert SHIFT == 'SHIFT'
+
+
+def test_NT():
+    assert NT('NP') == 'NT(NP)'
+
+
+def test_GEN():
+    assert GEN('John') == 'GEN(John)'
+
+
+def test_get_nonterm():
+    action = NT('NP')
+    assert get_nonterm(action) == 'NP'
+
+
+def test_get_nonterm_of_invalid_action():
     with pytest.raises(ValueError) as excinfo:
-        Action.from_string('asdf')
-    assert f'no action found from string asdf' in str(excinfo.value)
+        get_nonterm(SHIFT)
+    assert f'action {SHIFT} is not an NT action' in str(excinfo.value)
 
 
-class TestShiftAction(object):
-    as_str = 'SHIFT'
-
-    @staticmethod
-    def make_action():
-        return ShiftAction()
-
-    def test_eq(self):
-        assert self.make_action() == self.make_action()
-        assert self.make_action() != 'foo'
-
-    def test_hash(self):
-        assert hash(self.make_action()) == hash(self.make_action())
-
-    def test_str(self):
-        assert str(self.make_action()) == self.as_str
-
-    def test_from_string(self):
-        a = Action.from_string(self.as_str)
-        assert isinstance(a, ShiftAction)
+def test_get_word():
+    action = GEN('John')
+    assert get_word(action) == 'John'
 
 
-class TestReduceAction(object):
-    as_str = 'REDUCE'
-
-    @staticmethod
-    def make_action():
-        return ReduceAction()
-
-    def test_eq(self):
-        assert self.make_action() == self.make_action()
-        assert self.make_action() != 'foo'
-
-    def test_hash(self):
-        assert hash(self.make_action()) == hash(self.make_action())
-
-    def test_str(self):
-        assert str(self.make_action()) == self.as_str
-
-    def test_from_string(self):
-        a = Action.from_string(self.as_str)
-        assert isinstance(a, ReduceAction)
+def test_get_word_of_invalid_action():
+    with pytest.raises(ValueError) as excinfo:
+        get_word(SHIFT)
+    assert f'action {SHIFT} is not a GEN action' in str(excinfo.value)
 
 
-class TestNTAction(object):
-    as_str = 'NT({label})'
-
-    @staticmethod
-    def make_action(label='NP'):
-        return NTAction(label)
-
-    def test_eq(self):
-        assert self.make_action() == self.make_action()
-        assert self.make_action() != self.make_action('VP')
-        assert self.make_action() != 'foo'
-
-    def test_hash(self):
-        assert hash(self.make_action()) == hash(self.make_action())
-        assert hash(self.make_action()) != hash(self.make_action('VP'))
-
-    def test_str(self):
-        a = self.make_action()
-        assert str(a) == self.as_str.format(label=a.label)
-
-    def test_from_string(self):
-        label = 'NP'
-        a = Action.from_string(self.as_str.format(label=label))
-        assert isinstance(a, NTAction)
-        assert a.label == label
+def test_is_nt():
+    assert is_nt(NT('NP'))
+    assert not is_nt(REDUCE)
+    assert not is_nt(SHIFT)
+    assert not is_nt(GEN('John'))
 
 
-class TestGenAction(object):
-    as_str = 'GEN({word})'
-
-    @staticmethod
-    def make_action(word='asdf'):
-        return GenAction(word)
-
-    def test_eq(self):
-        assert self.make_action() == self.make_action()
-        assert self.make_action() != self.make_action('fdsa')
-        assert self.make_action() != 'foo'
-
-    def test_hash(self):
-        assert hash(self.make_action()) == hash(self.make_action())
-        assert hash(self.make_action()) != hash(self.make_action('fdsa'))
-
-    def test_str(self):
-        a = self.make_action()
-        assert str(a) == self.as_str.format(word=a.word)
-
-    def test_from_string(self):
-        word = 'asdf'
-        a = Action.from_string(self.as_str.format(word=word))
-        assert isinstance(a, GenAction)
-        assert a.word == word
+def test_is_gen():
+    assert is_gen(GEN('John'))
+    assert not is_gen(REDUCE)
+    assert not is_gen(SHIFT)
+    assert not is_gen(NT('NP'))

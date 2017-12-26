@@ -1,13 +1,13 @@
 from nltk.tree import Tree
 import pytest
 
-from rnng.actions import ShiftAction, ReduceAction, NTAction, GenAction
+from rnng.actions import GEN, NT, REDUCE, SHIFT
 from rnng.oracle import DiscOracle, GenOracle
 
 
 class TestDiscOracle:
     def test_init(self):
-        actions = [NTAction('S'), ShiftAction()]
+        actions = [NT('S'), SHIFT]
         pos_tags = ['NNP']
         words = ['John']
 
@@ -18,7 +18,7 @@ class TestDiscOracle:
         assert oracle.words == words
 
     def test_init_with_unequal_shift_count_and_number_of_words(self):
-        actions = [NTAction('S')]
+        actions = [NT('S')]
         pos_tags = ['NNP']
         words = ['John']
         with pytest.raises(ValueError) as excinfo:
@@ -26,7 +26,7 @@ class TestDiscOracle:
         assert 'number of words should match number of SHIFT actions' in str(excinfo.value)
 
     def test_init_with_unequal_number_of_words_and_pos_tags(self):
-        actions = [NTAction('S'), ShiftAction()]
+        actions = [NT('S'), SHIFT]
         pos_tags = ['NNP', 'VBZ']
         words = ['John']
         with pytest.raises(ValueError) as excinfo:
@@ -36,17 +36,17 @@ class TestDiscOracle:
     def test_from_parsed_sent(self):
         s = '(S (NP (NNP John)) (VP (VBZ loves) (NP (NNP Mary))))'
         expected_actions = [
-            NTAction('S'),
-            NTAction('NP'),
-            ShiftAction(),
-            ReduceAction(),
-            NTAction('VP'),
-            ShiftAction(),
-            NTAction('NP'),
-            ShiftAction(),
-            ReduceAction(),
-            ReduceAction(),
-            ReduceAction(),
+            NT('S'),
+            NT('NP'),
+            SHIFT,
+            REDUCE,
+            NT('VP'),
+            SHIFT,
+            NT('NP'),
+            SHIFT,
+            REDUCE,
+            REDUCE,
+            REDUCE,
         ]
         expected_pos_tags = ['NNP', 'VBZ', 'NNP']
         expected_words = ['John', 'loves', 'Mary']
@@ -61,7 +61,7 @@ class TestDiscOracle:
 
 class TestGenOracle:
     def test_init_with_unequal_gen_count_and_number_of_pos_tags(self):
-        actions = [NTAction('S')]
+        actions = [NT('S')]
         pos_tags = ['NNP']
         with pytest.raises(ValueError) as excinfo:
             GenOracle(actions, pos_tags)
@@ -70,17 +70,17 @@ class TestGenOracle:
     def test_from_parsed_sent(self):
         s = '(S (NP (NNP John)) (VP (VBZ loves) (NP (NNP Mary))))'
         expected_actions = [
-            NTAction('S'),
-            NTAction('NP'),
-            GenAction('John'),
-            ReduceAction(),
-            NTAction('VP'),
-            GenAction('loves'),
-            NTAction('NP'),
-            GenAction('Mary'),
-            ReduceAction(),
-            ReduceAction(),
-            ReduceAction()
+            NT('S'),
+            NT('NP'),
+            GEN('John'),
+            REDUCE,
+            NT('VP'),
+            GEN('loves'),
+            NT('NP'),
+            GEN('Mary'),
+            REDUCE,
+            REDUCE,
+            REDUCE
         ]
         expected_words = ['John', 'loves', 'Mary']
         expected_pos_tags = ['NNP', 'VBZ', 'NNP']

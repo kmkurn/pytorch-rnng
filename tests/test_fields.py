@@ -1,6 +1,6 @@
 from torchtext.data import Field
 
-from rnng.actions import NTAction, ReduceAction, ShiftAction
+from rnng.actions import NT, REDUCE, SHIFT
 from rnng.fields import ActionField
 from rnng.models import DiscRNNG
 
@@ -25,13 +25,13 @@ class TestActionField(object):
         field.build_vocab()
 
         assert len(field.vocab) == len(field.nonterm_field.vocab) + 2
-        assert field.vocab.stoi[str(ReduceAction())] == DiscRNNG.REDUCE_ID
-        assert field.vocab.stoi[str(ShiftAction())] == DiscRNNG.SHIFT_ID
+        assert field.vocab.stoi[REDUCE] == DiscRNNG.REDUCE_ID
+        assert field.vocab.stoi[SHIFT] == DiscRNNG.SHIFT_ID
         for nonterm in nonterms:
             nid = field.nonterm_field.vocab.stoi[nonterm]
-            action = NTAction(nonterm)
-            assert field.vocab.stoi[str(action)] == nid + 2
-        assert str(NTAction(field.nonterm_field.unk_token)) in field.vocab.stoi
+            action = NT(nonterm)
+            assert field.vocab.stoi[action] == nid + 2
+        assert NT(field.nonterm_field.unk_token) in field.vocab.stoi
 
     def test_numericalize(self):
         field = self.make_action_field()
@@ -39,11 +39,11 @@ class TestActionField(object):
         field.nonterm_field.build_vocab([nonterms])
         field.build_vocab()
         arr = [
-            str(NTAction('S')),
-            str(NTAction('NP')),
-            str(NTAction('VP')),
-            str(ShiftAction()),
-            str(ReduceAction()),
+            NT('S'),
+            NT('NP'),
+            NT('VP'),
+            SHIFT,
+            REDUCE,
         ]
 
         tensor = field.numericalize([arr], device=-1)
@@ -57,11 +57,11 @@ class TestActionField(object):
         field.nonterm_field.build_vocab([nonterms])
         field.build_vocab()
         arr = [
-            str(NTAction('PP')),
+            NT('PP'),
         ]
 
         tensor = field.numericalize([arr], device=-1)
 
         assert tensor.squeeze().data.tolist() == [
-            field.vocab.stoi[str(NTAction(field.nonterm_field.unk_token))]
+            field.vocab.stoi[NT(field.nonterm_field.unk_token)]
         ]

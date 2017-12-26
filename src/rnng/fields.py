@@ -4,7 +4,7 @@ from torch.autograd import Variable
 from torchtext.data import Field
 from torchtext.vocab import Vocab
 
-from rnng.actions import NTAction, ReduceAction, ShiftAction
+from rnng.actions import NT, REDUCE, SHIFT
 
 
 class ActionField(Field):
@@ -15,9 +15,9 @@ class ActionField(Field):
         self.nonterm_field = nonterm_field
 
     def build_vocab(self) -> None:
-        specials = [str(ReduceAction()), str(ShiftAction())]
+        specials = [REDUCE, SHIFT]
         for nonterm in self.nonterm_field.vocab.stoi:
-            specials.append(str(NTAction(nonterm)))
+            specials.append(NT(nonterm))
         self.vocab = Vocab(Counter(), specials=specials)
 
     def numericalize(self, arr, **kwargs) -> Variable:
@@ -32,6 +32,6 @@ class ActionField(Field):
         if s in self.vocab.stoi:
             return self.vocab.stoi[s]
         # must be an unknown NT action, so we map it to NT(<unk>)
-        action = NTAction(self.nonterm_field.unk_token)
-        assert str(action) in self.vocab.stoi
-        return self.vocab.stoi[str(action)]
+        action = NT(self.nonterm_field.unk_token)
+        assert action in self.vocab.stoi
+        return self.vocab.stoi[action]

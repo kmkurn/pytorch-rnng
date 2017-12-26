@@ -3,7 +3,7 @@ import pytest
 import torch
 import torch.nn as nn
 
-from rnng.actions import ShiftAction, ReduceAction, NTAction
+from rnng.actions import NT, REDUCE, SHIFT, get_nonterm
 from rnng.models import DiscRNNG, EmptyStackError, StackLSTM, log_softmax
 
 
@@ -223,27 +223,27 @@ class TestDiscRNNG(object):
     def make_actions(self, actions=None):
         if actions is None:
             actions = [
-                NTAction('S'),
-                NTAction('NP'),
-                ShiftAction(),
-                ReduceAction(),
-                NTAction('VP'),
-                ShiftAction(),
-                NTAction('NP'),
-                ShiftAction(),
-                ReduceAction(),
-                ReduceAction(),
-                ReduceAction(),
+                NT('S'),
+                NT('NP'),
+                SHIFT,
+                REDUCE,
+                NT('VP'),
+                SHIFT,
+                NT('NP'),
+                SHIFT,
+                REDUCE,
+                REDUCE,
+                REDUCE,
             ]
 
         return Variable(torch.LongTensor([self.action2id(x) for x in actions]))
 
     def action2id(self, action):
-        if isinstance(action, ReduceAction):
+        if action == REDUCE:
             return 0
-        if isinstance(action, ShiftAction):
+        if action == SHIFT:
             return 1
-        return self.nt2id[action.label] + 2
+        return self.nt2id[get_nonterm(action)] + 2
 
     def test_init_minimal(self):
         parser = DiscRNNG(
@@ -390,7 +390,7 @@ class TestDiscRNNG(object):
         words = self.make_words()
         pos_tags = self.make_pos_tags()
         actions = self.make_actions([
-            NTAction('S'), ShiftAction(), ShiftAction(), ShiftAction(), ShiftAction()])
+            NT('S'), SHIFT, SHIFT, SHIFT, SHIFT])
         parser = self.make_parser()
         llh = parser(words, pos_tags, actions)
         assert llh.exp().data[0] == pytest.approx(0, abs=1e-7)
@@ -398,7 +398,7 @@ class TestDiscRNNG(object):
     def test_forward_with_shift_when_no_open_nt_in_the_stack(self):
         words = self.make_words()
         pos_tags = self.make_pos_tags()
-        actions = self.make_actions([ShiftAction()])
+        actions = self.make_actions([SHIFT])
         parser = self.make_parser()
         llh = parser(words, pos_tags, actions)
         assert llh.exp().data[0] == pytest.approx(0, abs=1e-7)
@@ -406,7 +406,7 @@ class TestDiscRNNG(object):
     def test_forward_with_reduce_when_tos_is_an_open_nt(self):
         words = self.make_words()
         pos_tags = self.make_pos_tags()
-        actions = self.make_actions([NTAction('S'), ReduceAction()])
+        actions = self.make_actions([NT('S'), REDUCE])
         parser = self.make_parser()
         llh = parser(words, pos_tags, actions)
         assert llh.exp().data[0] == pytest.approx(0, abs=1e-7)
@@ -414,7 +414,7 @@ class TestDiscRNNG(object):
     def test_forward_with_reduce_when_only_single_open_nt_and_buffer_is_not_empty(self):
         words = self.make_words()
         pos_tags = self.make_pos_tags()
-        actions = self.make_actions([NTAction('S'), ShiftAction(), ReduceAction()])
+        actions = self.make_actions([NT('S'), SHIFT, REDUCE])
         parser = self.make_parser()
         llh = parser(words, pos_tags, actions)
         assert llh.exp().data[0] == pytest.approx(0, abs=1e-7)
@@ -423,7 +423,7 @@ class TestDiscRNNG(object):
         words = self.make_words()
         pos_tags = self.make_pos_tags()
         actions = self.make_actions([
-            NTAction('S'), ShiftAction(), ShiftAction(), ShiftAction(), NTAction('NP')])
+            NT('S'), SHIFT, SHIFT, SHIFT, NT('NP')])
         parser = self.make_parser()
         llh = parser(words, pos_tags, actions)
         assert llh.exp().data[0] == pytest.approx(0, abs=1e-7)
@@ -432,7 +432,7 @@ class TestDiscRNNG(object):
         DiscRNNG.MAX_OPEN_NT = 2
         words = self.make_words()
         pos_tags = self.make_pos_tags()
-        actions = self.make_actions([NTAction('S')] * (DiscRNNG.MAX_OPEN_NT+1))
+        actions = self.make_actions([NT('S')] * (DiscRNNG.MAX_OPEN_NT+1))
         parser = self.make_parser()
         llh = parser(words, pos_tags, actions)
         assert llh.exp().data[0] == pytest.approx(0, abs=1e-7)

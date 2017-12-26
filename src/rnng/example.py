@@ -2,13 +2,12 @@ from typing import List, Tuple
 
 from torchtext.data import Example, Field
 
-from rnng.actions import NTAction
+from rnng.actions import is_nt, get_nonterm
 from rnng.oracle import Oracle
 
 
 def make_example(oracle: Oracle, fields: List[Tuple[str, Field]]):
-    actions = [str(a) for a in oracle.actions]
-    nonterms = [a.label for a in oracle.actions if isinstance(a, NTAction)]
+    nonterms = [get_nonterm(a) for a in oracle.actions if is_nt(a)]
     return Example.fromlist(
-        [actions, nonterms, oracle.pos_tags, oracle.words], fields
+        [oracle.actions, nonterms, oracle.pos_tags, oracle.words], fields
     )
