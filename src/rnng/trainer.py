@@ -15,6 +15,7 @@ import torchnet as tnt
 
 from rnng.actions import NTAction, ReduceAction, ShiftAction
 from rnng.example import make_example
+from rnng.fields import ActionField
 from rnng.iterator import SimpleIterator
 from rnng.models import DiscRNNG
 from rnng.oracle import DiscOracle
@@ -99,10 +100,10 @@ class Trainer(object):
         self.artifacts_path = os.path.join(self.save_to, 'artifacts.tar.gz')
 
     def init_fields(self):
-        self.ACTIONS = Field(pad_token=None, unk_token=None)
-        self.NONTERMS = Field(pad_token=None)
-        self.POS_TAGS = Field(pad_token=None)
         self.WORDS = Field(pad_token=None, lower=self.lower)
+        self.POS_TAGS = Field(pad_token=None)
+        self.NONTERMS = Field(pad_token=None)
+        self.ACTIONS = ActionField(self.NONTERMS)
         self.fields = [
             ('actions', self.ACTIONS), ('nonterms', self.NONTERMS),
             ('pos_tags', self.POS_TAGS), ('words', self.WORDS),
@@ -125,11 +126,7 @@ class Trainer(object):
         self.WORDS.build_vocab(self.train_dataset, min_freq=self.min_freq)
         self.POS_TAGS.build_vocab(self.train_dataset)
         self.NONTERMS.build_vocab(self.train_dataset)
-        specials = [str(ReduceAction()), str(ShiftAction())]
-        for nonterm in self.NONTERMS.vocab.stoi:
-            specials.append(str(NTAction(nonterm)))
         self.ACTIONS.build_vocab()
-        self.ACTIONS.vocab = Vocab(collections.Counter(), specials=specials)
 
         self.num_words = len(self.WORDS.vocab)
         self.num_pos = len(self.POS_TAGS.vocab)
