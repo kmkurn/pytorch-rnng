@@ -200,7 +200,10 @@ class Trainer(object):
         pos_tags = sample.pos_tags.squeeze(1)
         actions = sample.actions.squeeze(1)
         llh = self.model(words, pos_tags, actions)
+        training = self.model.training
+        self.model.eval()
         _, hyp_tree = self.model.decode(words, pos_tags)
+        self.model.train(training)
         hyp_tree = id2parsetree(
             hyp_tree, self.NONTERMS.vocab.itos, self.WORDS.vocab.itos)
         hyp_tree = add_dummy_pos(hyp_tree)
@@ -212,9 +215,11 @@ class Trainer(object):
             self.train_timer.reset()
         else:
             self.reset_meters()
+            self.model.eval()
 
     def on_start_epoch(self, state: dict) -> None:
         self.reset_meters()
+        self.model.train()
         self.epoch_timer.reset()
 
     def on_sample(self, state: dict) -> None:
