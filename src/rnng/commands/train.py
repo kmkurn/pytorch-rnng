@@ -18,16 +18,16 @@ def make_parser(subparsers=None) -> argparse.ArgumentParser:
     parser.add_argument(
         '-d', '--dev-corpus', metavar='FILE', help='path to dev corpus')
     parser.add_argument(
-        '--encoding', default='utf-8', help='file encoding to use')
+        '--encoding', default='utf-8', help='file encoding to use (default: utf-8)')
     parser.add_argument(
         '--rnng-type', choices='discriminative'.split(), metavar='TYPE',
-        default='discriminative', help='type of RNNG to train')
+        default='discriminative', help='type of RNNG to train (default: discriminative)')
     parser.add_argument(
         '--no-lower', action='store_false', dest='lower',
         help='whether not to lowercase the words')
     parser.add_argument(
         '--min-freq', type=int, default=2, metavar='NUMBER',
-        help='minimum word frequency to be included in the vocabulary')
+        help='minimum word frequency to be included in the vocabulary (default: 2)')
     parser.add_argument(
         '--word-embedding-size', type=int, default=32, metavar='NUMBER',
         help='dimension of word embeddings (default: 32)')
@@ -59,14 +59,14 @@ def make_parser(subparsers=None) -> argparse.ArgumentParser:
         '--max-epochs', type=int, default=20, metavar='NUMBER',
         help='maximum number of epochs to train (default: 20)')
     parser.add_argument(
-        '--evalb', metavar='FILE', help='evalb executable file')
+        '--evalb', metavar='FILE', help='evalb executable file (default: evalb)')
     parser.add_argument(
         '--evalb-params', metavar='FILE', help='evalb params file')
     parser.add_argument(
         '--log-interval', type=int, default=10, metavar='NUMBER',
         help='print logs every this number of iterations (default: 10)')
     parser.add_argument(
-        '--seed', type=int, default=25122017, help='random seed')
+        '--seed', type=int, default=25122017, help='random seed (default: 25122017)')
     parser.add_argument(
         '--device', type=int, default=-1, help='GPU device to use (default: -1 for CPU)')
     parser.set_defaults(func=main)
