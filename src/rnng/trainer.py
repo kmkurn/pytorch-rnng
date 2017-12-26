@@ -1,4 +1,3 @@
-import collections
 import json
 import logging
 import os
@@ -7,13 +6,11 @@ import tarfile
 
 from nltk.corpus.reader import BracketParseCorpusReader
 from torchtext.data import Dataset, Field
-from torchtext.vocab import Vocab
 import dill
 import torch
 import torch.optim as optim
 import torchnet as tnt
 
-from rnng.actions import NTAction, ReduceAction, ShiftAction
 from rnng.example import make_example
 from rnng.fields import ActionField
 from rnng.iterator import SimpleIterator

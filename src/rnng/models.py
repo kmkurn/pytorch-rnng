@@ -1,4 +1,5 @@
-from typing import Dict, List, NamedTuple, Optional, Sequence, Sized, Tuple, Union, cast
+from typing import List, NamedTuple, Optional, Sequence, Sized, Tuple, Union, cast
+from typing import Dict  # noqa
 
 from nltk.tree import Tree
 from torch.autograd import Variable
