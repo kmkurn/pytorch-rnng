@@ -1,3 +1,4 @@
+from nltk.tree import Tree
 from torch.autograd import Variable
 import pytest
 import torch
@@ -464,7 +465,8 @@ class TestDiscRNNG(object):
         pos_tags = self.make_pos_tags()
         parser = self.make_parser()
 
-        best_action_ids = parser.decode(words, pos_tags)
+        best_action_ids, parse_tree = parser.decode(words, pos_tags)
 
         assert isinstance(best_action_ids, list)
+        assert isinstance(parse_tree, Tree)
         assert parser.finished

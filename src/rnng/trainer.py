@@ -3,7 +3,10 @@ import json
 import logging
 import os
 import random
+import re
+import subprocess
 import tarfile
+import tempfile
 
 from nltk.corpus.reader import BracketParseCorpusReader
 from torch.autograd import Variable
@@ -18,6 +21,7 @@ from rnng.fields import ActionField
 from rnng.iterator import SimpleIterator
 from rnng.models import DiscRNNG
 from rnng.oracle import DiscOracle
+from rnng.utils import add_dummy_pos, get_evalb_f1, id2parsetree
 
 
 class Trainer(object):
@@ -53,6 +57,8 @@ class Trainer(object):
             formatter = logging.Formatter('%(levelname)s - %(name)s - %(message)s')
             handler.setFormatter(formatter)
             logger.addHandler(handler)
+        if evalb is None:
+            evalb = 'evalb'
 
         self.train_corpus = train_corpus
         self.save_to = save_to
@@ -84,6 +90,8 @@ class Trainer(object):
         self.epoch_timer = tnt.meter.TimeMeter(None)
         self.train_timer = tnt.meter.TimeMeter(None)
         self.engine = tnt.engine.Engine()
+        self.ref_trees = []  # type: ignore
+        self.hyp_trees = []  # type: ignore
 
     def set_random_seed(self) -> None:
         self.logger.info('Setting random seed to %d', self.seed)
@@ -192,6 +200,11 @@ class Trainer(object):
         pos_tags = sample.pos_tags.squeeze(1)
         actions = sample.actions.squeeze(1)
         llh = self.model(words, pos_tags, actions)
+        _, hyp_tree = self.model.decode(words, pos_tags)
+        hyp_tree = id2parsetree(
+            hyp_tree, self.NONTERMS.vocab.itos, self.WORDS.vocab.itos)
+        hyp_tree = add_dummy_pos(hyp_tree)
+        self.hyp_trees.append(self.squeeze_whitespaces(str(hyp_tree)))
         return -llh, None
 
     def on_start(self, state: dict) -> None:
@@ -206,33 +219,45 @@ class Trainer(object):
 
     def on_sample(self, state: dict) -> None:
         self.batch_timer.reset()
+        sample = state['sample']
+        actions = [self.ACTIONS.vocab.itos[x] for x in sample.actions.squeeze(1).data]
+        pos_tags = [self.POS_TAGS.vocab.itos[x] for x in sample.pos_tags.squeeze(1).data]
+        words = [self.WORDS.vocab.itos[x] for x in sample.words.squeeze(1).data]
+        tree = DiscOracle(actions, pos_tags, words).to_tree()
+        self.ref_trees.append(self.squeeze_whitespaces(str(tree)))
 
     def on_forward(self, state: dict) -> None:
         elapsed_time = self.batch_timer.value()
         self.loss_meter.add(state['loss'].data[0])
         self.speed_meter.add(state['sample'].words.size(1) / elapsed_time)
         if state['train'] and (state['t'] + 1) % self.log_interval == 0:
+            f1_score = self.compute_f1()
             epoch = (state['t'] + 1) / len(state['iterator'])
             loss, _ = self.loss_meter.value()
             speed, _ = self.speed_meter.value()
             self.logger.info(
-                'Epoch %.4f (%.4fs): %.2f samples/sec | loss %.4f',
-                epoch, elapsed_time, speed, loss)
+                'Epoch %.4f (%.4fs): %.2f samples/sec | loss %.4f | F1 %.2f',
+                epoch, elapsed_time, speed, loss, f1_score)
 
     def on_end_epoch(self, state: dict) -> None:
+        iterator = SimpleIterator(self.train_dataset, train=False, device=self.device)
+        self.engine.test(self.network, iterator)
+        f1_score = self.compute_f1()
         epoch = state['epoch']
         elapsed_time = self.epoch_timer.value()
         loss, _ = self.loss_meter.value()
         speed, _ = self.speed_meter.value()
-        self.logger.info('Epoch %d done (%.4fs): %.2f samples/sec | loss %.4f',
-                         epoch, elapsed_time, speed, loss)
+        self.logger.info('Epoch %d done (%.4fs): %.2f samples/sec | loss %.4f | F1 %.2f',
+                         epoch, elapsed_time, speed, loss, f1_score)
         self.save_model()
         if self.dev_iterator is not None:
             self.engine.test(self.network, self.dev_iterator)
+            f1_score = self.compute_f1()
             loss, _ = self.loss_meter.value()
             speed, _ = self.speed_meter.value()
             self.logger.info(
-                'Evaluating on dev corpus: %.2f samples/sec | loss %.4f', speed, loss)
+                'Evaluating on dev corpus: %.2f samples/sec | loss %.4f | F1 %.2f',
+                speed, loss, f1_score)
 
     def on_end(self, state: dict) -> None:
         if state['train']:
@@ -250,6 +275,8 @@ class Trainer(object):
     def reset_meters(self) -> None:
         self.loss_meter.reset()
         self.speed_meter.reset()
+        self.ref_trees = []
+        self.hyp_trees = []
 
     def save_artifacts(self) -> None:
         self.logger.info('Saving training artifacts to %s', self.artifacts_path)
@@ -262,3 +289,21 @@ class Trainer(object):
     def save_model(self) -> None:
         self.logger.info('Saving model parameters to %s', self.model_params_path)
         torch.save(self.model.state_dict(), self.model_params_path)
+
+    def compute_f1(self) -> float:
+        with tempfile.NamedTemporaryFile(mode='w') as ref_file, \
+             tempfile.NamedTemporaryFile(mode='w') as hyp_file:
+            ref_file.write('\n'.join(self.ref_trees))
+            hyp_file.write('\n'.join(self.hyp_trees))
+            ref_file.flush()
+            hyp_file.flush()
+            if self.evalb_params is None:
+                args = [self.evalb, ref_file.name, hyp_file.name]
+            else:
+                args = [self.evalb, '-p', self.evalb_params, ref_file.name, hyp_file.name]
+            res = subprocess.run(args, stdout=subprocess.PIPE, encoding='utf-8')
+        return get_evalb_f1(res.stdout)
+
+    @staticmethod
+    def squeeze_whitespaces(s: str) -> str:
+        return re.sub(r'(\n| )+', ' ', s)

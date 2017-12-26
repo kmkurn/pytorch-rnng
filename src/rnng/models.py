@@ -298,7 +298,7 @@ class DiscRNNG(nn.Module):
             self._append_history(action_id)
         return llh
 
-    def decode(self, words: Variable, pos_tags: Variable) -> List[ActionId]:
+    def decode(self, words: Variable, pos_tags: Variable) -> Tuple[List[ActionId], Tree]:
         self._start(words, pos_tags)
         while not self.finished:
             log_probs = self._compute_action_log_probs()
@@ -319,7 +319,7 @@ class DiscRNNG(nn.Module):
                 else:
                     raise RuntimeError('most probable action is an illegal one')
             self._append_history(max_action_id)
-        return list(self._history)
+        return list(self._history), self._stack[0].subtree
 
     def _start(self,
                words: Variable,
