@@ -6,7 +6,6 @@ import random
 import re
 import subprocess
 import tarfile
-import tempfile
 
 from nltk.corpus.reader import BracketParseCorpusReader
 from torch.autograd import Variable
@@ -296,17 +295,16 @@ class Trainer(object):
         torch.save(self.model.state_dict(), self.model_params_path)
 
     def compute_f1(self) -> float:
-        with tempfile.NamedTemporaryFile(mode='w') as ref_file, \
-             tempfile.NamedTemporaryFile(mode='w') as hyp_file:
+        ref_fname = os.path.join(self.save_to, 'reference.bracket')
+        hyp_fname = os.path.join(self.save_to, 'hypothesis.bracket')
+        with open(ref_fname, 'w') as ref_file, open(hyp_fname, 'w') as hyp_file:
             ref_file.write('\n'.join(self.ref_trees))
             hyp_file.write('\n'.join(self.hyp_trees))
-            ref_file.flush()
-            hyp_file.flush()
-            if self.evalb_params is None:
-                args = [self.evalb, ref_file.name, hyp_file.name]
-            else:
-                args = [self.evalb, '-p', self.evalb_params, ref_file.name, hyp_file.name]
-            res = subprocess.run(args, stdout=subprocess.PIPE, encoding='utf-8')
+        if self.evalb_params is None:
+            args = [self.evalb, ref_file.name, hyp_file.name]
+        else:
+            args = [self.evalb, '-p', self.evalb_params, ref_fname, hyp_fname]
+        res = subprocess.run(args, stdout=subprocess.PIPE, encoding='utf-8')
         return get_evalb_f1(res.stdout)
 
     @staticmethod
